@@ -18,7 +18,6 @@ int vitalsAlert(string alertMessage) {
 }
 
 int vitalTemperatureCheck(float temperature) {
-  
   if (temperature > 102 || temperature < 95) {
     vitalsAlert("Temperature is critical!\n");
     return 0;
