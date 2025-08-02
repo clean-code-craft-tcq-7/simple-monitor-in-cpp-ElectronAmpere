@@ -8,12 +8,14 @@ TEST(Monitor, OkWhenAnyVitalIsInRange) {
   ASSERT_TRUE(vitalsOk(98.1, 70, 98));
 }
 
-
 TEST(Sweep, PulseRangeSweep) {
-  for (float move = 0; move <= VITALS_PULSE_MIN_COUNT; move++){
-    EXPECT_FALSE(vitalsOk(98.4, move, 97));
-  }
-  for (float move = VITALS_PULSE_MIN_COUNT+1; move <= VITALS_PULSE_MAX_COUNT; move++){
-    EXPECT_TRUE(vitalsOk(98.1, move, 98));
-  }
+  EXPECT_FALSE(vitalsOk(98.4, 10, 97));
+  EXPECT_FALSE(vitalsOk(98.4, 20, 97));
+  EXPECT_FALSE(vitalsOk(98.4, 30, 97));
+  EXPECT_TRUE(vitalsOk(98.4, 60, 97));
+  EXPECT_TRUE(vitalsOk(98.4, VITALS_PULSE_MIN_COUNT, 97));
+  EXPECT_TRUE(vitalsOk(98.1, VITALS_PULSE_MAX_COUNT, 98));
+  EXPECT_FALSE(vitalsOk(98.4, 110, 97));
+  EXPECT_FALSE(vitalsOk(98.4, 200, 97));
+  EXPECT_FALSE(vitalsOk(98.4, 300, 97));
 }
