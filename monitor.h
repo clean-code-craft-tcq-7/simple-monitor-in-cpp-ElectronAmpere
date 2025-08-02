@@ -11,11 +11,5 @@
 #define VITALS_ALERT_MAX_CYCLE (6)
 #define VITALS_ALERT_HOLD_SECONDS (1)
 
-/* Checkers */
-int vitalsAlert(string alertMessage);
-int vitalTemperatureCheck(float temperature);
-int vitalPulseCheck(float pulseRate);
-int vitalOxygenCheck(float spo2);
-
 /* Monitors */
 int vitalsOk(float temperature, float pulseRate, float spo2);
