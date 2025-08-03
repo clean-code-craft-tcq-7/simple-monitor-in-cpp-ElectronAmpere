@@ -13,3 +13,7 @@
 
 /* Monitors */
 int vitalsOk(float temperature, float pulseRate, float spo2);
+int vitalsAlert(string alertMessage);
+int vitalTemperatureCheck(float temperature);
+int vitalPulseCheck(float pulseRate);
+int vitalOxygenCheck(float spo2);
