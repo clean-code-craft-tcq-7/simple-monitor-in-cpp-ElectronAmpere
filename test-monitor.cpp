@@ -45,7 +45,7 @@ TEST(Monitor, OkWhenAllVitalIsInRange) {
   EXPECT_TRUE(vitalsOk(98.4, 73, 97));
 }
 
-TEST(Monitor, NoWhenAnyVitalIsNotInRange){
+TEST(Monitor, NoWhenAnyVitalIsNotInRange) {
   EXPECT_FALSE(vitalsOk(104.0, 73, 97));
   EXPECT_FALSE(vitalsOk(98.1, 120, 98));
   EXPECT_FALSE(vitalsOk(98.4, 73, 80));
