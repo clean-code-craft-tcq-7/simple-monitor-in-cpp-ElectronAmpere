@@ -1,52 +1,124 @@
 #include <gtest/gtest.h>
-#include <limits>
-
 #include "./monitor.h"
+#include <sstream>
+#include <thread>
+#include <chrono>
 
-TEST(Sweep, PulseRangeSweep) {
-  EXPECT_FALSE(vitalsOk(98.4, 10, 97));
-  EXPECT_FALSE(vitalsOk(98.4, 20, 97));
-  EXPECT_FALSE(vitalsOk(98.4, 30, 97));
-  EXPECT_TRUE(vitalsOk(98.4, 60, 97));
-  EXPECT_TRUE(vitalsOk(98.4, VITALS_PULSE_MIN_COUNT, 97));
-  EXPECT_TRUE(vitalsOk(98.1, VITALS_PULSE_MAX_COUNT, 98));
-  EXPECT_FALSE(vitalsOk(98.4, 110, 97));
-  EXPECT_FALSE(vitalsOk(98.4, 200, 97));
-  EXPECT_FALSE(vitalsOk(98.4, 300, 97));
+// Redirect cout to capture output
+class VitalsTest : public ::testing::Test {
+protected:
+    void SetUp() override {
+        // Save original cout buffer
+        original_cout_buffer = std::cout.rdbuf();
+        // Redirect cout to our stringstream
+        std::cout.rdbuf(output_stream.rdbuf());
+    }
+
+    void TearDown() override {
+        // Restore original cout buffer
+        std::cout.rdbuf(original_cout_buffer);
+    }
+
+    std::stringstream output_stream;
+    std::streambuf* original_cout_buffer = nullptr;
+};
+
+// Test vitalsAlert
+TEST_F(VitalsTest, VitalsAlert_PrintsCorrectMessage) {
+    std::string alert_message = "Test Alert!\n";
+    vitalsAlert(alert_message);
+    std::string output = output_stream.str();
+    // Expected output: alert message followed by "* * * " (for 3 cycles)
+    std::string expected = alert_message + "* * * ";
+    EXPECT_EQ(output, expected);
+    EXPECT_EQ(vitalsAlert(alert_message), 1); // Always returns 1
 }
 
-TEST(Sweep, TemperatureRangeSweep) {
-  EXPECT_FALSE(vitalsOk(10, 72, 97));
-  EXPECT_FALSE(vitalsOk(20, 72, 97));
-  EXPECT_FALSE(vitalsOk(30, 72, 97));
-  EXPECT_FALSE(vitalsOk(60,  72, 97));
-  EXPECT_TRUE(vitalsOk(VITALS_TEMPERATURE_MIN_DEGF, 72, 97));
-  EXPECT_TRUE(vitalsOk(VITALS_TEMPERATURE_MAX_DEGF, 72, 98));
-  EXPECT_FALSE(vitalsOk(110, 72, 97));
-  EXPECT_FALSE(vitalsOk(200, 72, 97));
-  EXPECT_FALSE(vitalsOk(300, 72, 97));
+// Test vitalTemperatureCheck
+TEST_F(VitalsTest, VitalTemperatureCheck_NormalRange) {
+    EXPECT_EQ(vitalTemperatureCheck(98.6f), 1); // Normal temperature
+    EXPECT_TRUE(output_stream.str().empty());   // No alert
 }
 
-TEST(Sweep, SPO2Sweep) {
-  EXPECT_FALSE(vitalsOk(98.4, 72, 10));
-  EXPECT_FALSE(vitalsOk(98.4, 72, 20));
-  EXPECT_FALSE(vitalsOk(98.4, 72, 30));
-  EXPECT_FALSE(vitalsOk(98.4,  72, 40));
-  EXPECT_TRUE(vitalsOk(98.4, 72, VTIALS_SPO2_MIN_PERCENT));
-  EXPECT_TRUE(vitalsOk(98.4, 72, 95));
-  EXPECT_TRUE(vitalsOk(98.4, 72, 100));
-  EXPECT_TRUE(vitalsOk(98.4, 72, 200));
-  EXPECT_TRUE(vitalsOk(98.4, 72, 300));
+TEST_F(VitalsTest, VitalTemperatureCheck_TooHigh) {
+    EXPECT_EQ(vitalTemperatureCheck(101.0f), 0); // Above max
+    std::string output = output_stream.str();
+    std::string expected = "Temperature is critical!\n* * * ";
+    EXPECT_EQ(output, expected);
 }
 
-TEST(Monitor, OkWhenAllVitalIsInRange) {
-  EXPECT_TRUE(vitalsOk(98.4, 73, 97));
-  EXPECT_TRUE(vitalsOk(98.1, 70, 98));
-  EXPECT_TRUE(vitalsOk(98.4, 73, 97));
+TEST_F(VitalsTest, VitalTemperatureCheck_TooLow) {
+    EXPECT_EQ(vitalTemperatureCheck(94.0f), 0); // Below min
+    std::string output = output_stream.str();
+    std::string expected = "Temperature is critical!\n* * * ";
+    EXPECT_EQ(output, expected);
 }
 
-TEST(Monitor, NoWhenAnyVitalIsNotInRange) {
-  EXPECT_FALSE(vitalsOk(104.0, 73, 97));
-  EXPECT_FALSE(vitalsOk(98.1, 120, 98));
-  EXPECT_FALSE(vitalsOk(98.4, 73, 80));
+// Test vitalPulseCheck
+TEST_F(VitalsTest, VitalPulseCheck_NormalRange) {
+    EXPECT_EQ(vitalPulseCheck(80.0f), 1); // Normal pulse
+    EXPECT_TRUE(output_stream.str().empty()); // No alert
+}
+
+TEST_F(VitalsTest, VitalPulseCheck_TooHigh) {
+    EXPECT_EQ(vitalPulseCheck(101.0f), 0); // Above max
+    std::string output = output_stream.str();
+    std::string expected = "Pulse Rate is out of range!\n* * * ";
+    EXPECT_EQ(output, expected);
+}
+
+TEST_F(VitalsTest, VitalPulseCheck_TooLow) {
+    EXPECT_EQ(vitalPulseCheck(59.0f), 0); // Below min
+    std::string output = output_stream.str();
+    std::string expected = "Pulse Rate is out of range!\n* * * ";
+    EXPECT_EQ(output, expected);
+}
+
+// Test vitalOxygenCheck
+TEST_F(VitalsTest, VitalOxygenCheck_NormalRange) {
+    EXPECT_EQ(vitalOxygenCheck(95.0f), 1); // Normal SpO2
+    EXPECT_TRUE(output_stream.str().empty()); // No alert
+}
+
+TEST_F(VitalsTest, VitalOxygenCheck_TooLow) {
+    EXPECT_EQ(vitalOxygenCheck(89.0f), 0); // Below min
+    std::string output = output_stream.str();
+    std::string expected = "Oxygen Saturation out of range!\n* * * ";
+    EXPECT_EQ(output, expected);
+}
+
+// Test vitalsOk
+TEST_F(VitalsTest, VitalsOk_AllNormal) {
+    EXPECT_EQ(vitalsOk(98.6f, 80.0f, 95.0f), 1); // All in range
+    EXPECT_TRUE(output_stream.str().empty());      // No alerts
+}
+
+TEST_F(VitalsTest, VitalsOk_TemperatureOutOfRange) {
+    EXPECT_EQ(vitalsOk(101.0f, 80.0f, 95.0f), 0); // Temperature too high
+    std::string output = output_stream.str();
+    std::string expected = "Temperature is critical!\n* * * ";
+    EXPECT_EQ(output, expected);
+}
+
+TEST_F(VitalsTest, VitalsOk_PulseOutOfRange) {
+    EXPECT_EQ(vitalsOk(98.6f, 101.0f, 95.0f), 0); // Pulse too high
+    std::string output = output_stream.str();
+    std::string expected = "Pulse Rate is out of range!\n* * * ";
+    EXPECT_EQ(output, expected);
+}
+
+TEST_F(VitalsTest, VitalsOk_OxygenOutOfRange) {
+    EXPECT_EQ(vitalsOk(98.6f, 80.0f, 89.0f), 0); // SpO2 too low
+    std::string output = output_stream.str();
+    std::string expected = "Oxygen Saturation out of range!\n* * * ";
+    EXPECT_EQ(output, expected);
+}
+
+TEST_F(VitalsTest, VitalsOk_MultipleOutOfRange) {
+    EXPECT_EQ(vitalsOk(101.0f, 101.0f, 89.0f), 0); // All out of range
+    std::string output = output_stream.str();
+    std::string expected = "Temperature is critical!\n* * * "
+                          "Pulse Rate is out of range!\n* * * "
+                          "Oxygen Saturation out of range!\n* * * ";
+    EXPECT_EQ(output, expected);
 }
