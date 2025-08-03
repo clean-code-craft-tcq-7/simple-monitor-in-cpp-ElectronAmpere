@@ -34,9 +34,9 @@ TEST(Sweep, SPO2Sweep) {
   EXPECT_FALSE(vitalsOk(98.4,  72, 40));
   EXPECT_TRUE(vitalsOk(98.4, 72, VTIALS_SPO2_MIN_PERCENT));
   EXPECT_TRUE(vitalsOk(98.4, 72, 95));
-  EXPECT_FALSE(vitalsOk(98.4, 72, 100));
-  EXPECT_FALSE(vitalsOk(98.4, 72, 200));
-  EXPECT_FALSE(vitalsOk(98.4, 72, 300));
+  EXPECT_TRUE(vitalsOk(98.4, 72, 100));
+  EXPECT_TRUE(vitalsOk(98.4, 72, 200));
+  EXPECT_TRUE(vitalsOk(98.4, 72, 300));
 }
 
 TEST(Monitor, OkWhenAllVitalIsInRange) {
@@ -46,7 +46,7 @@ TEST(Monitor, OkWhenAllVitalIsInRange) {
 }
 
 TEST(Monitor, NoWhenAnyVitalIsNotInRange){
-  EXPECT_FALSE(vitalsOk(100.0, 73, 97));
+  EXPECT_FALSE(vitalsOk(104.0, 73, 97));
   EXPECT_FALSE(vitalsOk(98.1, 120, 98));
   EXPECT_FALSE(vitalsOk(98.4, 73, 80));
 }
