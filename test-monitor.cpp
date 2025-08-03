@@ -1,148 +1,138 @@
 #include <gtest/gtest.h>
 #include "./monitor.h"
-#include <sstream>
-#include <thread>
-#include <chrono>
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
 
 // Constants for expected output
-const std::string ALERT_ASTERISKS = "* * * "; // For VITALS_ALERT_MAX_CYCLE = 3
+#define ALERT_ASTERISKS "* * * "
+#define OUTPUT_FILE "test_output.txt"
 
-// Test fixture
+// Test fixture for stdout redirection
 class VitalsTest : public ::testing::Test {
-protected:
+  protected:
     void SetUp() override {
-        original_cout_buffer = std::cout.rdbuf();
-        std::cout.rdbuf(output_stream.rdbuf());
+        redirect_stdout_to_file(OUTPUT_FILE);
     }
 
     void TearDown() override {
-        std::cout.rdbuf(original_cout_buffer);
+        restore_stdout();
+        remove(OUTPUT_FILE); // Clean up file
     }
 
-    // Helper to generate expected alert output
-    std::string getExpectedAlertOutput(const std::string& message) const {
-        return message + ALERT_ASTERISKS;
+    void redirect_stdout_to_file(const char* filename) {
+        freopen(filename, "w", stdout);
     }
 
-    // Helper to check alert output and return value
-    void checkAlertFunction(int (*func)(float), float value, const std::string& expected_message, int expected_return) {
-        output_stream.str(""); // Clear output stream
-        EXPECT_EQ(func(value), expected_return);
-        if (expected_return == 0) {
-            EXPECT_EQ(output_stream.str(), getExpectedAlertOutput(expected_message));
-        } else {
-            EXPECT_TRUE(output_stream.str().empty());
+    void restore_stdout() {
+        freopen("/dev/tty", "w", stdout);
+    }
+
+    char* read_file_content() {
+        static char buffer[1024];
+        buffer[0] = '\0';
+        FILE* file = fopen(OUTPUT_FILE, "r");
+        if (file) {
+            fread(buffer, 1, sizeof(buffer) - 1, file);
+            buffer[sizeof(buffer) - 1] = '\0';
+            fclose(file);
         }
+        return buffer;
     }
 
-    std::stringstream output_stream;
-    std::streambuf* original_cout_buffer = nullptr;
-};
+    void get_expected_alert_output(const char* message, char* output, size_t size) {
+        snprintf(output, size, "%s%s", message, ALERT_ASTERISKS);
+    }
 
-// Parameterized test struct for vital checks
-struct VitalCheckTestParams {
-    float value;
-    int expected_return;
-    std::string alert_message;
+    void check_vital_function(int (*func)(float), float value, 
+                              int expected_return, const char* alert_message) {
+        char expected[256] = "";
+        if (alert_message[0] != '\0') {
+            get_expected_alert_output(alert_message, expected, sizeof(expected));
+        }
+        EXPECT_EQ(func(value), expected_return);
+        EXPECT_STREQ(read_file_content(), expected);
+    }
 };
 
 // Test vitalsAlert
 TEST_F(VitalsTest, VitalsAlert_PrintsCorrectMessage) {
-    std::string alert_message = "Test Alert!\n";
+    const char* alert_message = "Test Alert!\n";
+    char expected[256];
+    get_expected_alert_output(alert_message, expected, sizeof(expected));
     EXPECT_EQ(vitalsAlert(alert_message), 1);
-    EXPECT_EQ(output_stream.str(), getExpectedAlertOutput(alert_message));
+    EXPECT_STREQ(read_file_content(), expected);
 }
 
-// Parameterized tests for vitalTemperatureCheck
-class VitalTemperatureCheckTest : public VitalsTest, public ::testing::WithParamInterface<VitalCheckTestParams> {};
-
-TEST_P(VitalTemperatureCheckTest, TemperatureCheck) {
-    const auto& param = GetParam();
-    checkAlertFunction(vitalTemperatureCheck, param.value, param.alert_message, param.expected_return);
+// Test vitalTemperatureCheck
+TEST_F(VitalsTest, VitalTemperatureCheck_NormalRange) {
+    check_vital_function(vitalTemperatureCheck, 98.6f, 1, "");
 }
 
-INSTANTIATE_TEST_SUITE_P(
-    TemperatureTests,
-    VitalTemperatureCheckTest,
-    ::testing::Values(
-        VitalCheckTestParams{98.6f, 1, ""}, // Normal
-        VitalCheckTestParams{101.0f, 0, "Temperature is critical!\n"}, // Too high
-        VitalCheckTestParams{94.0f, 0, "Temperature is critical!\n"}   // Too low
-    ));
-
-// Parameterized tests for vitalPulseCheck
-class VitalPulseCheckTest : public VitalsTest, public ::testing::WithParamInterface<VitalCheckTestParams> {};
-
-TEST_P(VitalPulseCheckTest, PulseCheck) {
-    const auto& param = GetParam();
-    checkAlertFunction(vitalPulseCheck, param.value, param.alert_message, param.expected_return);
+TEST_F(VitalsTest, VitalTemperatureCheck_TooHigh) {
+    check_vital_function(vitalTemperatureCheck, 101.0f, 0, "Temperature is critical!\n");
 }
 
-INSTANTIATE_TEST_SUITE_P(
-    PulseTests,
-    VitalPulseCheckTest,
-    ::testing::Values(
-        VitalCheckTestParams{80.0f, 1, ""}, // Normal
-        VitalCheckTestParams{101.0f, 0, "Pulse Rate is out of range!\n"}, // Too high
-        VitalCheckTestParams{59.0f, 0, "Pulse Rate is out of range!\n"}   // Too low
-    ));
-
-// Parameterized tests for vitalOxygenCheck
-class VitalOxygenCheckTest : public VitalsTest, public ::testing::WithParamInterface<VitalCheckTestParams> {};
-
-TEST_P(VitalOxygenCheckTest, OxygenCheck) {
-    const auto& param = GetParam();
-    checkAlertFunction(vitalOxygenCheck, param.value, param.alert_message, param.expected_return);
+TEST_F(VitalsTest, VitalTemperatureCheck_TooLow) {
+    check_vital_function(vitalTemperatureCheck, 94.0f, 0, "Temperature is critical!\n");
 }
 
-INSTANTIATE_TEST_SUITE_P(
-    OxygenTests,
-    VitalOxygenCheckTest,
-    ::testing::Values(
-        VitalCheckTestParams{95.0f, 1, ""}, // Normal
-        VitalCheckTestParams{89.0f, 0, "Oxygen Saturation out of range!\n"} // Too low
-    ));
-
-// Parameterized test struct for vitalsOk
-struct VitalsOkTestParams {
-    float temperature;
-    float pulse;
-    float spo2;
-    int expected_return;
-    std::vector<std::string> alert_messages; // Expected alert messages in order
-};
-
-// Parameterized tests for vitalsOk
-class VitalsOkTest : public VitalsTest, public ::testing::WithParamInterface<VitalsOkTestParams> {};
-
-TEST_P(VitalsOkTest, VitalsOkCheck) {
-    const auto& param = GetParam();
-    output_stream.str(""); // Clear output stream
-    EXPECT_EQ(vitalsOk(param.temperature, param.pulse, param.spo2), param.expected_return);
-    std::string expected_output;
-    for (const auto& msg : param.alert_messages) {
-        expected_output += getExpectedAlertOutput(msg);
-    }
-    EXPECT_EQ(output_stream.str(), expected_output);
+// Test vitalPulseCheck
+TEST_F(VitalsTest, VitalPulseCheck_NormalRange) {
+    check_vital_function(vitalPulseCheck, 80.0f, 1, "");
 }
 
-INSTANTIATE_TEST_SUITE_P(
-    VitalsOkTests,
-    VitalsOkTest,
-    ::testing::Values(
-        VitalsOkTestParams{98.6f, 80.0f, 95.0f, 1, {}}, // All normal
-        VitalsOkTestParams{101.0f, 80.0f, 95.0f, 0, {"Temperature is critical!\n"}}, // Temp too high
-        VitalsOkTestParams{98.6f, 101.0f, 95.0f, 0, {"Pulse Rate is out of range!\n"}}, // Pulse too high
-        VitalsOkTestParams{98.6f, 80.0f, 89.0f, 0, {"Oxygen Saturation out of range!\n"}}, // SpO2 too low
-        VitalsOkTestParams{101.0f, 101.0f, 89.0f, 0, {
-            "Temperature is critical!\n",
-            "Pulse Rate is out of range!\n",
-            "Oxygen Saturation out of range!\n"
-        }} // All out of range
-    ));
-
-// Main function for running tests
-int main(int argc, char **argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
+TEST_F(VitalsTest, VitalPulseCheck_TooHigh) {
+    check_vital_function(vitalPulseCheck, 101.0f, 0, "Pulse Rate is out of range!\n");
 }
+
+TEST_F(VitalsTest, VitalPulseCheck_TooLow) {
+    check_vital_function(vitalPulseCheck, 59.0f, 0, "Pulse Rate is out of range!\n");
+}
+
+// Test vitalOxygenCheck
+TEST_F(VitalsTest, VitalOxygenCheck_NormalRange) {
+    check_vital_function(vitalOxygenCheck, 95.0f, 1, "");
+}
+
+TEST_F(VitalsTest, VitalOxygenCheck_TooLow) {
+    check_vital_function(vitalOxygenCheck, 89.0f, 0, "Oxygen Saturation out of range!\n");
+}
+
+// Test vitalsOk
+TEST_F(VitalsTest, VitalsOk_AllNormal) {
+    EXPECT_EQ(vitalsOk(98.6f, 80.0f, 95.0f), 1);
+    EXPECT_STREQ(read_file_content(), "");
+}
+
+TEST_F(VitalsTest, VitalsOk_TemperatureOutOfRange) {
+    char expected[256];
+    get_expected_alert_output("Temperature is critical!\n", expected, sizeof(expected));
+    EXPECT_EQ(vitalsOk(101.0f, 80.0f, 95.0f), 0);
+    EXPECT_STREQ(read_file_content(), expected);
+}
+
+TEST_F(VitalsTest, VitalsOk_PulseOutOfRange) {
+    char expected[256];
+    get_expected_alert_output("Pulse Rate is out of range!\n", expected, sizeof(expected));
+    EXPECT_EQ(vitalsOk(98.6f, 101.0f, 95.0f), 0);
+    EXPECT_STREQ(read_file_content(), expected);
+}
+
+TEST_F(VitalsTest, VitalsOk_OxygenOutOfRange) {
+    char expected[256];
+    get_expected_alert_output("Oxygen Saturation out of range!\n", expected, sizeof(expected));
+    EXPECT_EQ(vitalsOk(98.6f, 80.0f, 89.0f), 0);
+    EXPECT_STREQ(read_file_content(), expected);
+}
+
+TEST_F(VitalsTest, VitalsOk_MultipleOutOfRange) {
+    char expected[1024];
+    snprintf(expected, sizeof(expected), "Temperature is critical!\n%s"
+                                       "Pulse Rate is out of range!\n%s"
+                                       "Oxygen Saturation out of range!\n%s",
+             ALERT_ASTERISKS, ALERT_ASTERISKS, ALERT_ASTERISKS);
+    EXPECT_EQ(vitalsOk(101.0f, 101.0f, 89.0f), 0);
+    EXPECT_STREQ(read_file_content(), expected);
+}
+

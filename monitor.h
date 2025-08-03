@@ -1,4 +1,5 @@
 #pragma once
+#include <string>
 
 /* Range of all the vitals */
 #define VITALS_TEMPERATURE_MIN_DEGF (95.0f)

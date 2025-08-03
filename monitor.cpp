@@ -44,8 +44,7 @@ int vitalOxygenCheck(float spo2) {
 }
 
 int vitalsOk(float temperature, float pulseRate, float spo2) {
-  int result = 1;
-  result &= vitalTemperatureCheck(temperature);
+  int result = vitalTemperatureCheck(temperature);
   result &= vitalPulseCheck(pulseRate);
   result &= vitalOxygenCheck(spo2);
   return (result);
