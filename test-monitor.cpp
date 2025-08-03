@@ -3,11 +3,6 @@
 
 #include "./monitor.h"
 
-TEST(Monitor, OkWhenAnyVitalIsInRange) {
-  ASSERT_TRUE(vitalsOk(98.4, 73, 97));
-  ASSERT_TRUE(vitalsOk(98.1, 70, 98));
-}
-
 TEST(Sweep, PulseRangeSweep) {
   EXPECT_FALSE(vitalsOk(98.4, 10, 97));
   EXPECT_FALSE(vitalsOk(98.4, 20, 97));
@@ -20,7 +15,7 @@ TEST(Sweep, PulseRangeSweep) {
   EXPECT_FALSE(vitalsOk(98.4, 300, 97));
 }
 
-TEST(Sweep, TemperatureSweep) {
+TEST(Sweep, TemperatureRangeSweep) {
   EXPECT_FALSE(vitalsOk(10, 72, 97));
   EXPECT_FALSE(vitalsOk(20, 72, 97));
   EXPECT_FALSE(vitalsOk(30, 72, 97));
@@ -42,4 +37,16 @@ TEST(Sweep, SPO2Sweep) {
   EXPECT_FALSE(vitalsOk(98.4, 72, 100));
   EXPECT_FALSE(vitalsOk(98.4, 72, 200));
   EXPECT_FALSE(vitalsOk(98.4, 72, 300));
+}
+
+TEST(Monitor, OkWhenAllVitalIsInRange) {
+  EXPECT_TRUE(vitalsOk(98.4, 73, 97));
+  EXPECT_TRUE(vitalsOk(98.1, 70, 98));
+  EXPECT_TRUE(vitalsOk(98.4, 73, 97));
+}
+
+TEST(Monitor, NoWhenAnyVitalIsNotInRange){
+  EXPECT_FALSE(vitalsOk(100.0, 73, 97));
+  EXPECT_FALSE(vitalsOk(98.1, 120, 98));
+  EXPECT_FALSE(vitalsOk(98.4, 73, 80));
 }
