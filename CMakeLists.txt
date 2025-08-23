@@ -20,8 +20,9 @@ set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 enable_testing()
 
-file(GLOB SOURCES "*.cpp")
-add_executable(test-monitor ${SOURCES})
+file(GLOB SOURCES "src/*.cpp")
+file(GLOB TEST_SOURCES "test/*.cpp")
+add_executable(test-monitor ${SOURCES} ${TEST_SOURCES})
 
 target_link_libraries(
   test-monitor

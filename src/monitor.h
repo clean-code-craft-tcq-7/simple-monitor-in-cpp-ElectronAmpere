@@ -11,5 +11,12 @@
 #define VITALS_ALERT_MAX_CYCLE (6)
 #define VITALS_ALERT_HOLD_SECONDS (1)
 
+typedef void (*delayAlertDisplay_ptr)(long long);
+
 /* Monitors */
+void vitalAlertDelayDisplay(long long durationInSeconds);
+int vitalTemperatureCheck(float temperature);
+int vitalPulseCheck(float pulseRate);
+int vitalOxygenCheck(float spo2);
 int vitalsOk(float temperature, float pulseRate, float spo2);
+void vitalUpdateAlertDelay(delayAlertDisplay_ptr func_ptr);
