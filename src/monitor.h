@@ -1,11 +1,12 @@
 #pragma once
+#include <string>
 
 /* Range of all the vitals */
 #define VITALS_TEMPERATURE_MIN_DEGF (95.0f)
 #define VITALS_TEMPERATURE_MAX_DEGF (102.0f)
 #define VITALS_PULSE_MIN_COUNT (60.0f)
 #define VITALS_PULSE_MAX_COUNT (100.0f)
-#define VTIALS_SPO2_MIN_PERCENT (90.0f)
+#define VITALS_SPO2_MIN_PERCENT (90.0f)
 
 /* Alert cycles */
 #define VITALS_ALERT_MAX_CYCLE (6)
@@ -20,3 +21,4 @@ int vitalPulseCheck(float pulseRate);
 int vitalOxygenCheck(float spo2);
 int vitalsOk(float temperature, float pulseRate, float spo2);
 void vitalUpdateAlertDelay(delayAlertDisplay_ptr func_ptr);
+int vitalsAlert(std::string alertMessage);
