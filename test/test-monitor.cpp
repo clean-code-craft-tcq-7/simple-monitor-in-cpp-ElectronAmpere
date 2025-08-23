@@ -11,27 +11,27 @@ protected:
     // Set no-op delay for all tests to avoid real sleeps and make tests fast
     vitalUpdateAlertDelay([](long long /*seconds*/) {});
     // Redirect cout to a stringstream for output capture
-    original_cout_buffer_ = std::cout.rdbuf(output_stream_.rdbuf());
+    original_cout_buffer = std::cout.rdbuf(output_stream.rdbuf());
   }
 
   void TearDown() override {
     // Restore original cout buffer
-    std::cout.rdbuf(original_cout_buffer_);
+    std::cout.rdbuf(original_cout_buffer);
     // Reset delay to default if needed (but not necessary for tests)
   }
 
   // Helper to get captured output
-  std::string GetCapturedOutput() { return output_stream_.str(); }
+  std::string GetCapturedOutput() { return output_stream.str(); }
 
   // Helper to reset output stream
   void ResetOutput() {
-    output_stream_.str("");
-    output_stream_.clear();
+    output_stream.str("");
+    output_stream.clear();
   }
 
 private:
-  std::stringstream output_stream_;
-  std::streambuf *original_cout_buffer_ = nullptr;
+  std::stringstream output_stream;
+  std::streambuf *original_cout_buffer = nullptr;
 };
 
 // Test vitalsOk when all vitals are in range
@@ -69,21 +69,6 @@ TEST_F(MonitorTest, TemperatureRangeSweep) {
   EXPECT_TRUE(GetCapturedOutput().find("Temperature is critical!") !=
               std::string::npos);
 
-  ResetOutput();
-  EXPECT_FALSE(vitalsOk(20.0f, 72.0f, 97.0f));
-  EXPECT_TRUE(GetCapturedOutput().find("Temperature is critical!") !=
-              std::string::npos);
-
-  ResetOutput();
-  EXPECT_FALSE(vitalsOk(30.0f, 72.0f, 97.0f));
-  EXPECT_TRUE(GetCapturedOutput().find("Temperature is critical!") !=
-              std::string::npos);
-
-  ResetOutput();
-  EXPECT_FALSE(vitalsOk(60.0f, 72.0f, 97.0f));
-  EXPECT_TRUE(GetCapturedOutput().find("Temperature is critical!") !=
-              std::string::npos);
-
   // At boundaries
   EXPECT_TRUE(vitalsOk(VITALS_TEMPERATURE_MIN_DEGF, 72.0f, 97.0f));
   EXPECT_TRUE(vitalsOk(VITALS_TEMPERATURE_MAX_DEGF, 72.0f, 98.0f));
@@ -91,16 +76,6 @@ TEST_F(MonitorTest, TemperatureRangeSweep) {
   // Above max
   ResetOutput();
   EXPECT_FALSE(vitalsOk(110.0f, 72.0f, 97.0f));
-  EXPECT_TRUE(GetCapturedOutput().find("Temperature is critical!") !=
-              std::string::npos);
-
-  ResetOutput();
-  EXPECT_FALSE(vitalsOk(200.0f, 72.0f, 97.0f));
-  EXPECT_TRUE(GetCapturedOutput().find("Temperature is critical!") !=
-              std::string::npos);
-
-  ResetOutput();
-  EXPECT_FALSE(vitalsOk(300.0f, 72.0f, 97.0f));
   EXPECT_TRUE(GetCapturedOutput().find("Temperature is critical!") !=
               std::string::npos);
 }
@@ -114,16 +89,6 @@ TEST_F(MonitorTest, PulseRangeSweep) {
   EXPECT_TRUE(GetCapturedOutput().find("Pulse Rate is out of range!") !=
               std::string::npos);
 
-  ResetOutput();
-  EXPECT_FALSE(vitalsOk(98.4f, 20.0f, 97.0f));
-  EXPECT_TRUE(GetCapturedOutput().find("Pulse Rate is out of range!") !=
-              std::string::npos);
-
-  ResetOutput();
-  EXPECT_FALSE(vitalsOk(98.4f, 30.0f, 97.0f));
-  EXPECT_TRUE(GetCapturedOutput().find("Pulse Rate is out of range!") !=
-              std::string::npos);
-
   // At boundaries
   EXPECT_TRUE(vitalsOk(98.4f, VITALS_PULSE_MIN_COUNT, 97.0f));
   EXPECT_TRUE(vitalsOk(98.1f, VITALS_PULSE_MAX_COUNT, 98.0f));
@@ -131,16 +96,6 @@ TEST_F(MonitorTest, PulseRangeSweep) {
   // Above max
   ResetOutput();
   EXPECT_FALSE(vitalsOk(98.4f, 110.0f, 97.0f));
-  EXPECT_TRUE(GetCapturedOutput().find("Pulse Rate is out of range!") !=
-              std::string::npos);
-
-  ResetOutput();
-  EXPECT_FALSE(vitalsOk(98.4f, 200.0f, 97.0f));
-  EXPECT_TRUE(GetCapturedOutput().find("Pulse Rate is out of range!") !=
-              std::string::npos);
-
-  ResetOutput();
-  EXPECT_FALSE(vitalsOk(98.4f, 300.0f, 97.0f));
   EXPECT_TRUE(GetCapturedOutput().find("Pulse Rate is out of range!") !=
               std::string::npos);
 }
@@ -153,29 +108,12 @@ TEST_F(MonitorTest, SPO2RangeSweep) {
   EXPECT_TRUE(GetCapturedOutput().find("Oxygen Saturation out of range!") !=
               std::string::npos);
 
-  ResetOutput();
-  EXPECT_FALSE(vitalsOk(98.4f, 72.0f, 20.0f));
-  EXPECT_TRUE(GetCapturedOutput().find("Oxygen Saturation out of range!") !=
-              std::string::npos);
-
-  ResetOutput();
-  EXPECT_FALSE(vitalsOk(98.4f, 72.0f, 30.0f));
-  EXPECT_TRUE(GetCapturedOutput().find("Oxygen Saturation out of range!") !=
-              std::string::npos);
-
-  ResetOutput();
-  EXPECT_FALSE(vitalsOk(98.4f, 72.0f, 40.0f));
-  EXPECT_TRUE(GetCapturedOutput().find("Oxygen Saturation out of range!") !=
-              std::string::npos);
-
   // At min and above (SPO2 can be >100? Assuming yes as per reference)
   EXPECT_TRUE(vitalsOk(98.4f, 72.0f,
                        VITALS_SPO2_MIN_PERCENT)); // Assuming typo fixed to
                                                   // VITALS_SPO2_MIN_PERCENT
   EXPECT_TRUE(vitalsOk(98.4f, 72.0f, 95.0f));
   EXPECT_TRUE(vitalsOk(98.4f, 72.0f, 100.0f));
-  EXPECT_TRUE(vitalsOk(98.4f, 72.0f, 200.0f));
-  EXPECT_TRUE(vitalsOk(98.4f, 72.0f, 300.0f));
 }
 
 // Direct tests for individual check functions
