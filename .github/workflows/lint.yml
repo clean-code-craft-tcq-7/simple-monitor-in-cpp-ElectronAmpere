@@ -28,7 +28,7 @@ jobs:
 
     - name: cppcheck
       run: |
-        cppcheck --enable=all --error-exitcode=1 --suppress=missingIncludeSystem --std=c++17 *.cpp *.h
+        cppcheck --enable=all --error-exitcode=1 --suppress=missingIncludeSystem --std=c++17 $(find . -name '*.cpp' -o -name '*.h')
 
     - name: clang-format
       run: |
