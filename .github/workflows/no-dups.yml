@@ -13,4 +13,4 @@ jobs:
       run: sudo npm install -g jscpd
 
     - name: No Duplication beyond 3 lines
-      run:  jscpd . --formats-exts cpp, h --gitignore --min-lines 3 --min-tokens 25 --threshold 0
+      run:  jscpd . --gitignore --min-lines 3 --min-tokens 25 --threshold 0
