@@ -258,13 +258,6 @@ TEST_F(MonitorTest, VitalsReportNormalFalseWhenAnyOutOfRange) {
 TEST_F(MonitorTest, VitalsReportNormalMultipleAlerts) {
   Report_t report_multi = {104.0f, 110.0f, 80.0f, 120.0f, 160.0f, 25.0f};
 
-  ResetOutput();
-  EXPECT_FALSE(monitorVitalsReportStatus(&report_multi));
-  ExpectMultipleAlerts(GetCapturedOutput(),
-                       {TEMPERATURE_ALERT, PULSE_ALERT, SPO2_ALERT,
-                        BLOODSUGAR_ALERT, BLOODPRESSURE_ALERT,
-                        RESPIRATORYRATE_ALERT});
-
   CHECK_VITAL(monitorVitalsReportStatus, (&report_multi), 0,
               {TEMPERATURE_ALERT, PULSE_ALERT, SPO2_ALERT, BLOODSUGAR_ALERT,
                BLOODPRESSURE_ALERT, RESPIRATORYRATE_ALERT});
