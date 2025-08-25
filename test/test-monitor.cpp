@@ -1,5 +1,12 @@
 #include "./test_monitor.h" // For numeric_limits if needed for edge cases
 #include <string>
+
+#define EXPECT_POSITION_ALERT(output, alertA, alertB, alertC)                  \
+  output = GetCapturedOutput();                                                \
+  EXPECT_TRUE(output.find(alertA) != std::string::npos);                       \
+  EXPECT_TRUE(output.find(alertB) != std::string::npos);                       \
+  EXPECT_TRUE(output.find(alertC) != std::string::npos);
+
 // Test monitorVitalsStatus when all vitals are in range
 TEST_F(MonitorTest, OkWhenAllVitalsInRange) {
   EXPECT_TRUE(monitorVitalsStatus(98.4f, 73.0f, 97.0f));
@@ -162,19 +169,16 @@ TEST_F(MonitorTest, EdgeCasesWithInvalidValues) {
   // All Inf
   ResetOutput();
   EXPECT_FALSE(monitorVitalsStatus(inf, inf, inf));
-  std::string output = GetCapturedOutput();
-  EXPECT_TRUE(output.find(TEMPERATURE_ALERT) != std::string::npos);
-  EXPECT_TRUE(output.find(PULSE_ALERT) != std::string::npos);
-  EXPECT_TRUE(output.find(SPO2_ALERT) != std::string::npos);
+  std::string output;
+  EXPECT_POSITION_ALERT(output, TEMPERATURE_ALERT, PULSE_ALERT, SPO2_ALERT);
 }
+
 // Test multiple alerts in one monitorVitalsStatus call (e.g., two vitals out)
 TEST_F(MonitorTest, MultipleAlertsInOneCheck) {
   ResetOutput();
   EXPECT_FALSE(monitorVitalsStatus(104.0f, 110.0f, 80.0f));
-  std::string output = GetCapturedOutput();
-  EXPECT_TRUE(output.find(TEMPERATURE_ALERT) != std::string::npos);
-  EXPECT_TRUE(output.find(PULSE_ALERT) != std::string::npos);
-  EXPECT_TRUE(output.find(SPO2_ALERT) != std::string::npos);
+  std::string output;
+  EXPECT_POSITION_ALERT(output, TEMPERATURE_ALERT, PULSE_ALERT, SPO2_ALERT);
 }
 // New sweep tests for blood sugar in vitalBloodSugarCheck
 TEST_F(MonitorTest, BloodSugarRangeSweep) {
@@ -343,13 +347,10 @@ TEST_F(MonitorTest, VitalsReportNormalMultipleAlerts) {
   Report_t report_multiple_out = {104.0f, 110.0f, 80.0f, 120.0f, 160.0f, 25.0f};
   ResetOutput();
   EXPECT_FALSE(monitorVitalsReportStatus(&report_multiple_out));
-  std::string output = GetCapturedOutput();
-  EXPECT_TRUE(output.find(TEMPERATURE_ALERT) != std::string::npos);
-  EXPECT_TRUE(output.find(PULSE_ALERT) != std::string::npos);
-  EXPECT_TRUE(output.find(SPO2_ALERT) != std::string::npos);
-  EXPECT_TRUE(output.find(BLOODSUGAR_ALERT) != std::string::npos);
-  EXPECT_TRUE(output.find(BLOODPRESSURE_ALERT) != std::string::npos);
-  EXPECT_TRUE(output.find(RESPIRATORYRATE_ALERT) != std::string::npos);
+  std::string output;
+  EXPECT_POSITION_ALERT(output, TEMPERATURE_ALERT, PULSE_ALERT, SPO2_ALERT);
+  EXPECT_POSITION_ALERT(output, BLOODSUGAR_ALERT, BLOODPRESSURE_ALERT,
+                        RESPIRATORYRATE_ALERT);
 }
 // Edge cases for new vitals in individual checks
 TEST_F(MonitorTest, NewVitalsEdgeCasesWithInvalidValues) {
