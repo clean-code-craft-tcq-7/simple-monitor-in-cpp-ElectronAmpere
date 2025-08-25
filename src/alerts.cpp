@@ -17,7 +17,7 @@ void vitalAlertDelayDisplay(long long durationInSeconds) {
   sleep_for(seconds(durationInSeconds));
 }
 
-int vitalsAlert(std::string alertMessage) {
+int vitalsAlert(const std::string &alertMessage) {
   cout << alertMessage;
   for (int i = 0; i < VITALS_ALERT_MAX_CYCLE; i++) {
     cout << "\r* " << flush;

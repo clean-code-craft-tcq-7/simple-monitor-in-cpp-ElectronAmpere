@@ -50,5 +50,5 @@ typedef void (*delayAlertDisplay_ptr)(long long);
 #endif
 
 void vitalUpdateAlertDelay(delayAlertDisplay_ptr func_ptr);
-int vitalsAlert(std::string alertMessage);
+int vitalsAlert(const std::string &alertMessage);
 void vitalAlertDelayDisplay(long long durationInSeconds);

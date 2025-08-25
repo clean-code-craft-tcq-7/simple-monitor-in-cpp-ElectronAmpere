@@ -8,7 +8,7 @@ int monitorVitalsStatus(float temperature, float pulseRate, float spo2) {
   return (result);
 }
 
-int monitorVitalsReportStatus(Report_t *vitalReport) {
+int monitorVitalsReportStatus(const Report_t *vitalReport) {
   int result = monitorVitalsStatus(vitalReport->temperature,
                                    vitalReport->pulseRate, vitalReport->spo2);
   result &= vitalBloodSugarCheck(vitalReport->bloodSugar);

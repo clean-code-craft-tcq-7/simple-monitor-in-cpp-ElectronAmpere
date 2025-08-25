@@ -7,4 +7,4 @@
 int monitorVitalsStatus(float temperature, float pulseRate, float spo2);
 
 /* Monitors 2.0 */
-int monitorVitalsReportStatus(Report_t *vitalReport);
+int monitorVitalsReportStatus(const Report_t *vitalReport);
