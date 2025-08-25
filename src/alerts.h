@@ -31,7 +31,7 @@ typedef void (*delayAlertDisplay_ptr)(long long);
 
 #define ALERT_IN_ENGLISH (0)
 #define ALERT_IN_GERMAN (1)
-#define ALERT_LANG (ALERT_IN_GERMAN)
+#define ALERT_LANG (ALERT_IN_ENGLISH)
 
 #if (ALERT_LANG == ALERT_IN_ENGLISH)
 #define TEMPERATURE_ALERT (PULSE_ALERT_ENG)

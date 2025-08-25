@@ -1,392 +1,303 @@
-#include "./test_monitor.h" // For numeric_limits if needed for edge cases
+#include "./test_monitor.h"
+#include <cmath>
+#include <cstddef>
+#include <functional>
+#include <limits>
+#include <regex>
 #include <string>
+#include <vector>
 
-#define EXPECT_POSITION_ALERT(output, alertA, alertB, alertC)                  \
-  output = GetCapturedOutput();                                                \
-  EXPECT_TRUE(output.find(alertA) != std::string::npos);                       \
-  EXPECT_TRUE(output.find(alertB) != std::string::npos);                       \
-  EXPECT_TRUE(output.find(alertC) != std::string::npos);
+// Helper to verify multiple alerts in captured output
+void ExpectMultipleAlerts(const std::string &output,
+                          const std::vector<const char *> &alerts) {
+  for (const char *alert : alerts) {
+    EXPECT_TRUE(output.find(alert) != std::string::npos);
+  }
+}
 
-// Test monitorVitalsStatus when all vitals are in range
+// Sweep Tests for all vitals
+struct SweepParam {
+  std::function<bool(float)> checkFunc;
+  float min, max;
+  const char *alert;
+  std::vector<float> belowValues, aboveValues;
+};
+
+// For parameterized sweeps
+class VitalSweepTest : public MonitorTest,
+                       public ::testing::WithParamInterface<SweepParam> {};
+
+TEST_P(VitalSweepTest, RangeSweep) {
+  auto param = GetParam();
+
+  auto expectOut = [this](auto func, float value, const char *alert) {
+    ResetOutput();
+    EXPECT_FALSE(func(value));
+    EXPECT_TRUE(GetCapturedOutput().find(alert) != std::string::npos);
+  };
+
+  for (float value : param.belowValues) {
+    expectOut(param.checkFunc, value, param.alert);
+  }
+
+  EXPECT_TRUE(param.checkFunc(param.min));
+  EXPECT_TRUE(param.checkFunc(param.max));
+
+  for (float value : param.aboveValues) {
+    expectOut(param.checkFunc, value, param.alert);
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(BloodSugar, VitalSweepTest,
+                         ::testing::Values(SweepParam{
+                             vitalBloodSugarCheck,
+                             VITALS_BLOODSUGAR_MIN,
+                             VITALS_BLOODSUGAR_MAX,
+                             BLOODSUGAR_ALERT,
+                             {10.0f, 20.0f, 30.0f, 60.0f},
+                             {120.0f, 200.0f, 300.0f}}));
+
+INSTANTIATE_TEST_SUITE_P(BloodPressure, VitalSweepTest,
+                         ::testing::Values(SweepParam{
+                             vitalBloodPressureCheck,
+                             VITALS_BLOODPRESSURE_MIN,
+                             VITALS_BLOODPRESSURE_MAX,
+                             BLOODPRESSURE_ALERT,
+                             {10.0f, 20.0f, 30.0f, 80.0f},
+                             {160.0f, 200.0f, 300.0f}}));
+
+INSTANTIATE_TEST_SUITE_P(RespiratoryRate, VitalSweepTest,
+                         ::testing::Values(SweepParam{
+                             vitalRespiratoryRateCheck,
+                             VITALS_RESPIRATORYRATE_MIN,
+                             VITALS_RESPIRATORYRATE_MAX,
+                             RESPIRATORYRATE_ALERT,
+                             {0.0f, 5.0f, 10.0f},
+                             {25.0f, 30.0f, 40.0f}}));
+
 TEST_F(MonitorTest, OkWhenAllVitalsInRange) {
   EXPECT_TRUE(monitorVitalsStatus(98.4f, 73.0f, 97.0f));
   EXPECT_TRUE(monitorVitalsStatus(98.1f, 70.0f, 98.0f));
   EXPECT_TRUE(monitorVitalsStatus(98.4f, 73.0f, 97.0f));
-  EXPECT_EQ(GetCapturedOutput(), ""); // No alerts expected
+  EXPECT_EQ(GetCapturedOutput(), "");
 }
-// Test monitorVitalsStatus when any vital is out of range
+
+// Macros for generalized vital checks without ambiguity
+// Utility to call a function with a tuple of arguments
+#define CALL_FUNC(func, args) func args
+
+// Handles expected = 1 (no alert)
+#define _CHECK_VITAL_EXPECT_1() EXPECT_EQ(GetCapturedOutput(), "");
+
+// Handles expected = 0 (one or more alerts)
+#define _CHECK_VITAL_EXPECT_0(...)                                             \
+  ExpectMultipleAlerts(GetCapturedOutput(), __VA_ARGS__)
+
+// Main macro to test vital checks
+#define CHECK_VITAL(function, args, expected, ...)                             \
+  ResetOutput();                                                               \
+  EXPECT_EQ(CALL_FUNC(function, args), expected);                              \
+  _CHECK_VITAL_EXPECT_##expected(__VA_ARGS__)
+
+// Like CHECK_VITAL, but expects false return
+#define CHECK_VITAL_FALSE(function, args, expected, ...)                       \
+  ResetOutput();                                                               \
+  EXPECT_FALSE(CALL_FUNC(function, args));                                     \
+  _CHECK_VITAL_EXPECT_##expected(__VA_ARGS__)
+
+// Macro to count occurrences of a pattern in a string
+#define CHECK_POSITION_COUNTER(position, output, pattern, counter, limit)      \
+  position = 0;                                                                \
+  counter = 0;                                                                 \
+  while ((position = output.find(pattern, position)) != std::string::npos) {   \
+    ++counter;                                                                 \
+    position += strlen(pattern);                                               \
+  }
+
+// Tests for individual vitals
 TEST_F(MonitorTest, FalseWhenAnyVitalOutOfRange) {
-  ResetOutput();
-  EXPECT_FALSE(monitorVitalsStatus(104.0f, 73.0f, 97.0f));
-  EXPECT_TRUE(GetCapturedOutput().find(TEMPERATURE_ALERT) != std::string::npos);
-  ResetOutput();
-  EXPECT_FALSE(monitorVitalsStatus(98.1f, 120.0f, 98.0f));
-  EXPECT_TRUE(GetCapturedOutput().find(PULSE_ALERT) != std::string::npos);
-  ResetOutput();
-  EXPECT_FALSE(monitorVitalsStatus(98.4f, 73.0f, 80.0f));
-  EXPECT_TRUE(GetCapturedOutput().find(SPO2_ALERT) != std::string::npos);
+  CHECK_VITAL(monitorVitalsStatus, (104.0f, 73.0f, 97.0f), 0,
+              {TEMPERATURE_ALERT});
+  CHECK_VITAL(monitorVitalsStatus, (98.1f, 120.0f, 98.0f), 0, {PULSE_ALERT});
+  CHECK_VITAL(monitorVitalsStatus, (98.4f, 73.0f, 80.0f), 0, {SPO2_ALERT});
 }
-// Sweep tests for temperature ranges in monitorVitalsStatus (covers
-// vitalTemperatureCheck indirectly)
+
 TEST_F(MonitorTest, TemperatureRangeSweep) {
-  // Below min
-  ResetOutput();
-  EXPECT_FALSE(monitorVitalsStatus(10.0f, 72.0f, 97.0f));
-  EXPECT_TRUE(GetCapturedOutput().find(TEMPERATURE_ALERT) != std::string::npos);
-  // At boundaries
+  CHECK_VITAL(monitorVitalsStatus, (10.0f, 72.0f, 97.0f), 0,
+              {TEMPERATURE_ALERT});
   EXPECT_TRUE(monitorVitalsStatus(VITALS_TEMPERATURE_MIN_DEGF, 72.0f, 97.0f));
-  EXPECT_TRUE(monitorVitalsStatus(VITALS_TEMPERATURE_MAX_DEGF, 72.0f, 98.0f));
-  // Above max
-  ResetOutput();
-  EXPECT_FALSE(monitorVitalsStatus(110.0f, 72.0f, 97.0f));
-  EXPECT_TRUE(GetCapturedOutput().find(TEMPERATURE_ALERT) != std::string::npos);
+  EXPECT_TRUE(monitorVitalsStatus(VITALS_TEMPERATURE_MAX_DEGF, 73.0f, 98.0f));
+  CHECK_VITAL(monitorVitalsStatus, (110.0f, 72.0f, 97.0f), 0,
+              {TEMPERATURE_ALERT});
 }
-// Sweep tests for pulse rate ranges in monitorVitalsStatus (covers
-// vitalPulseCheck indirectly)
+
 TEST_F(MonitorTest, PulseRangeSweep) {
-  // Below min
-  ResetOutput();
-  EXPECT_FALSE(monitorVitalsStatus(98.4f, 10.0f, 97.0f));
-  EXPECT_TRUE(GetCapturedOutput().find(PULSE_ALERT) != std::string::npos);
-  // At boundaries
-  EXPECT_TRUE(monitorVitalsStatus(98.4f, VITALS_PULSE_MIN_COUNT, 97.0f));
-  EXPECT_TRUE(monitorVitalsStatus(98.1f, VITALS_PULSE_MAX_COUNT, 98.0f));
-  // Above max
-  ResetOutput();
-  EXPECT_FALSE(monitorVitalsStatus(98.4f, 110.0f, 97.0f));
-  EXPECT_TRUE(GetCapturedOutput().find(PULSE_ALERT) != std::string::npos);
+  CHECK_VITAL(monitorVitalsStatus, (98.4f, 10.0f, 97.0f), 0, {PULSE_ALERT});
+  EXPECT_TRUE(monitorVitalsStatus(98.4f, VITALS_PULSE_MIN_COUNT, 98.0f));
+  EXPECT_TRUE(monitorVitalsStatus(98.4f, VITALS_PULSE_MAX_COUNT, 98.0f));
+  CHECK_VITAL(monitorVitalsStatus, (98.4f, 110.0f, 97.0f), 0, {PULSE_ALERT});
 }
-// Sweep tests for SPO2 ranges in monitorVitalsStatus (covers vitalOxygenCheck
-// indirectly)
+
 TEST_F(MonitorTest, SPO2RangeSweep) {
-  // Below min
-  ResetOutput();
-  EXPECT_FALSE(monitorVitalsStatus(98.4f, 72.0f, 10.0f));
-  EXPECT_TRUE(GetCapturedOutput().find(SPO2_ALERT) != std::string::npos);
-  // At min and above (SPO2 can be >100? Assuming yes as per reference)
-  EXPECT_TRUE(
-      monitorVitalsStatus(98.4f, 72.0f,
-                          VITALS_SPO2_MIN_PERCENT)); // Assuming typo fixed to
-                                                     // VITALS_SPO2_MIN_PERCENT
+  CHECK_VITAL(monitorVitalsStatus, (98.4f, 72.0f, 10.0f), 0, {SPO2_ALERT});
+  EXPECT_TRUE(monitorVitalsStatus(98.4f, 72.0f, VITALS_SPO2_MIN_PERCENT));
   EXPECT_TRUE(monitorVitalsStatus(98.4f, 72.0f, 95.0f));
   EXPECT_TRUE(monitorVitalsStatus(98.4f, 72.0f, 100.0f));
 }
-// Direct tests for individual check functions
+
 TEST_F(MonitorTest, VitalTemperatureCheck) {
-  ResetOutput();
-  EXPECT_EQ(vitalTemperatureCheck(98.0f), 1);
-  EXPECT_EQ(GetCapturedOutput(), ""); // In range, no alert
-  ResetOutput();
-  EXPECT_EQ(vitalTemperatureCheck(103.0f), 0); // Above max
-  EXPECT_TRUE(GetCapturedOutput().find(TEMPERATURE_ALERT) != std::string::npos);
-  ResetOutput();
-  EXPECT_EQ(vitalTemperatureCheck(94.0f),
-            0); // Below min (assuming min=95.0f or similar)
-  EXPECT_TRUE(GetCapturedOutput().find(TEMPERATURE_ALERT) != std::string::npos);
+  CHECK_VITAL(vitalTemperatureCheck, (98.0f), 1);
+  CHECK_VITAL(vitalTemperatureCheck, (50.0f), 0, {TEMPERATURE_ALERT});
+  CHECK_VITAL(vitalTemperatureCheck, (94.0f), 0, {TEMPERATURE_ALERT});
 }
+
 TEST_F(MonitorTest, VitalPulseCheck) {
-  ResetOutput();
-  EXPECT_EQ(vitalPulseCheck(72.0f), 1);
-  EXPECT_EQ(GetCapturedOutput(), ""); // In range
-  ResetOutput();
-  EXPECT_EQ(vitalPulseCheck(50.0f), 0); // Below min
-  EXPECT_TRUE(GetCapturedOutput().find(PULSE_ALERT) != std::string::npos);
-  ResetOutput();
-  EXPECT_EQ(vitalPulseCheck(110.0f), 0); // Above max
-  EXPECT_TRUE(GetCapturedOutput().find(PULSE_ALERT) != std::string::npos);
+  CHECK_VITAL(vitalPulseCheck, (72.0f), 1);
+  CHECK_VITAL(vitalPulseCheck, (50.0f), 0, {PULSE_ALERT});
+  CHECK_VITAL(vitalPulseCheck, (110.0f), 0, {PULSE_ALERT});
 }
+
 TEST_F(MonitorTest, VitalOxygenCheck) {
-  ResetOutput();
-  EXPECT_EQ(vitalOxygenCheck(97.0f), 1);
-  EXPECT_EQ(GetCapturedOutput(), ""); // In range
-  ResetOutput();
-  EXPECT_EQ(vitalOxygenCheck(80.0f), 0); // Below min
-  EXPECT_TRUE(GetCapturedOutput().find(SPO2_ALERT) != std::string::npos);
+  CHECK_VITAL(vitalOxygenCheck, (97.0f), 1);
+  CHECK_VITAL(vitalOxygenCheck, (80.0f), 0, {SPO2_ALERT});
 }
-// Test vitalsAlert directly (output and cycle behavior)
+
 TEST_F(MonitorTest, VitalsAlertOutputAndCycles) {
   ResetOutput();
   EXPECT_EQ(vitalsAlert("Test Alert!\n"), 1);
   std::string output = GetCapturedOutput();
   EXPECT_TRUE(output.find("Test Alert!") != std::string::npos);
-  // Check for asterisk patterns: since delay is no-op, outputs are sequential
-  // Expect patterns like "* " and " *" repeated VITALS_ALERT_MAX_CYCLE times
-  size_t star_count = 0;
-  size_t space_star_count = 0;
-  for (size_t pos = 0; (pos = output.find("\r* ", pos)) != std::string::npos;) {
-    ++star_count;
-    pos += 3; // Advance past found substring
-  }
-  for (size_t pos = 0; (pos = output.find("\r *", pos)) != std::string::npos;) {
-    ++space_star_count;
-    pos += 3;
-  }
-  EXPECT_EQ(star_count, VITALS_ALERT_MAX_CYCLE);
-  EXPECT_EQ(space_star_count, VITALS_ALERT_MAX_CYCLE);
+
+  size_t starCount = 0;
+  size_t spaceStarCount = 0;
+  size_t position = 0;
+
+  CHECK_POSITION_COUNTER(position, output, "\r* ", starCount, 3);
+  CHECK_POSITION_COUNTER(position, output, "\r *", spaceStarCount, 3);
+
+  EXPECT_EQ(starCount, VITALS_ALERT_MAX_CYCLE);
+  EXPECT_EQ(spaceStarCount, VITALS_ALERT_MAX_CYCLE);
 }
-// Test delay function pointer mechanism
+
 TEST_F(MonitorTest, VitalUpdateAlertDelay) {
-  // Use static for call count to enable non-capturing lambda
-  static int delay_call_count =
-      0; // Reset per test? If needed, reset in SetUp/TearDown or use fixture
-         // member with free function.
-  // Reset count for this test
-  delay_call_count = 0;
-  // Non-capturing lambda (compatible with raw function pointer)
-  auto custom_delay = [](long long seconds) {
+  static int delayCallCount = 0;
+  delayCallCount = 0;
+
+  auto customDelay = [](long long seconds) {
     EXPECT_EQ(seconds, VITALS_ALERT_HOLD_SECONDS);
-    ++delay_call_count;
+    ++delayCallCount;
   };
-  // Update to custom (now assignable to delayAlertDisplay_ptr)
-  vitalUpdateAlertDelay(custom_delay);
-  // Call alert, which should use custom delay
+  vitalUpdateAlertDelay(customDelay);
+
   ResetOutput();
-  vitalsAlert("Delay Test\n");
-  // Expect 2 calls per cycle (two delays per loop)
-  EXPECT_EQ(delay_call_count, 2 * VITALS_ALERT_MAX_CYCLE);
+  vitalsAlert("Delay Test!\n");
+  EXPECT_EQ(delayCallCount, 2 * VITALS_ALERT_MAX_CYCLE);
 }
-// Edge cases: Extreme values, NaN, etc. (assuming float inputs)
+
 TEST_F(MonitorTest, EdgeCasesWithInvalidValues) {
   float nan = std::numeric_limits<float>::quiet_NaN();
   float inf = std::numeric_limits<float>::infinity();
   float neg_inf = -inf;
-  // NaN in temperature
-  ResetOutput();
-  EXPECT_FALSE(monitorVitalsStatus(nan, 72.0f, 97.0f));
-  EXPECT_TRUE(GetCapturedOutput().find(TEMPERATURE_ALERT) != std::string::npos);
-  // Inf in pulseRate
-  ResetOutput();
-  EXPECT_FALSE(monitorVitalsStatus(98.4f, inf, 97.0f));
-  EXPECT_TRUE(GetCapturedOutput().find(PULSE_ALERT) != std::string::npos);
-  // Negative Inf in spo2
-  ResetOutput();
-  EXPECT_FALSE(monitorVitalsStatus(98.4f, 72.0f, neg_inf));
-  EXPECT_TRUE(GetCapturedOutput().find(SPO2_ALERT) != std::string::npos);
-  // Mixed: NaN in one, valid in others
-  ResetOutput();
-  EXPECT_FALSE(monitorVitalsStatus(98.4f, nan, 97.0f));
-  EXPECT_TRUE(GetCapturedOutput().find(PULSE_ALERT) != std::string::npos);
-  // All Inf
-  ResetOutput();
-  EXPECT_FALSE(monitorVitalsStatus(inf, inf, inf));
-  std::string output;
-  EXPECT_POSITION_ALERT(output, TEMPERATURE_ALERT, PULSE_ALERT, SPO2_ALERT);
+
+  CHECK_VITAL(monitorVitalsStatus, (nan, 72.0f, 97.0f), 0, {TEMPERATURE_ALERT});
+  CHECK_VITAL(monitorVitalsStatus, (98.4f, inf, 97.0f), 0, {PULSE_ALERT});
+  CHECK_VITAL(monitorVitalsStatus, (98.4f, 72.0f, neg_inf), 0, {SPO2_ALERT});
+  CHECK_VITAL(monitorVitalsStatus, (98.4f, nan, 97.0f), 0, {PULSE_ALERT});
+  CHECK_VITAL(monitorVitalsStatus, (inf, inf, inf), 0,
+              {TEMPERATURE_ALERT, PULSE_ALERT, SPO2_ALERT});
 }
 
-// Test multiple alerts in one monitorVitalsStatus call (e.g., two vitals out)
 TEST_F(MonitorTest, MultipleAlertsInOneCheck) {
-  ResetOutput();
-  EXPECT_FALSE(monitorVitalsStatus(104.0f, 110.0f, 80.0f));
-  std::string output;
-  EXPECT_POSITION_ALERT(output, TEMPERATURE_ALERT, PULSE_ALERT, SPO2_ALERT);
+  CHECK_VITAL(monitorVitalsStatus, (104.0f, 110.0f, 80.0f), 0,
+              {TEMPERATURE_ALERT, PULSE_ALERT, SPO2_ALERT});
 }
-// New sweep tests for blood sugar in vitalBloodSugarCheck
-TEST_F(MonitorTest, BloodSugarRangeSweep) {
-  // Below min
-  ResetOutput();
-  EXPECT_FALSE(vitalBloodSugarCheck(10.0f));
-  EXPECT_TRUE(GetCapturedOutput().find(BLOODSUGAR_ALERT) != std::string::npos);
-  ResetOutput();
-  EXPECT_FALSE(vitalBloodSugarCheck(20.0f));
-  EXPECT_TRUE(GetCapturedOutput().find(BLOODSUGAR_ALERT) != std::string::npos);
-  ResetOutput();
-  EXPECT_FALSE(vitalBloodSugarCheck(30.0f));
-  EXPECT_TRUE(GetCapturedOutput().find(BLOODSUGAR_ALERT) != std::string::npos);
-  ResetOutput();
-  EXPECT_FALSE(vitalBloodSugarCheck(60.0f));
-  EXPECT_TRUE(GetCapturedOutput().find(BLOODSUGAR_ALERT) != std::string::npos);
-  // At boundaries
-  EXPECT_TRUE(vitalBloodSugarCheck(VITALS_BLOODSUGAR_MIN));
-  EXPECT_TRUE(vitalBloodSugarCheck(VITALS_BLOODSUGAR_MAX));
-  // Above max
-  ResetOutput();
-  EXPECT_FALSE(vitalBloodSugarCheck(120.0f));
-  EXPECT_TRUE(GetCapturedOutput().find(BLOODSUGAR_ALERT) != std::string::npos);
-  ResetOutput();
-  EXPECT_FALSE(vitalBloodSugarCheck(200.0f));
-  EXPECT_TRUE(GetCapturedOutput().find(BLOODSUGAR_ALERT) != std::string::npos);
-  ResetOutput();
-  EXPECT_FALSE(vitalBloodSugarCheck(300.0f));
-  EXPECT_TRUE(GetCapturedOutput().find(BLOODSUGAR_ALERT) != std::string::npos);
-}
-// New sweep tests for blood pressure in vitalBloodPressureCheck
-TEST_F(MonitorTest, BloodPressureRangeSweep) {
-  // Below min
-  ResetOutput();
-  EXPECT_FALSE(vitalBloodPressureCheck(10.0f));
-  EXPECT_TRUE(GetCapturedOutput().find(BLOODPRESSURE_ALERT) !=
-              std::string::npos);
-  ResetOutput();
-  EXPECT_FALSE(vitalBloodPressureCheck(20.0f));
-  EXPECT_TRUE(GetCapturedOutput().find(BLOODPRESSURE_ALERT) !=
-              std::string::npos);
-  ResetOutput();
-  EXPECT_FALSE(vitalBloodPressureCheck(30.0f));
-  EXPECT_TRUE(GetCapturedOutput().find(BLOODPRESSURE_ALERT) !=
-              std::string::npos);
-  ResetOutput();
-  EXPECT_FALSE(vitalBloodPressureCheck(80.0f));
-  EXPECT_TRUE(GetCapturedOutput().find(BLOODPRESSURE_ALERT) !=
-              std::string::npos);
-  // At boundaries
-  EXPECT_TRUE(vitalBloodPressureCheck(VITALS_BLOODPRESSURE_MIN));
-  EXPECT_TRUE(vitalBloodPressureCheck(VITALS_BLOODPRESSURE_MAX));
-  // Above max
-  ResetOutput();
-  EXPECT_FALSE(vitalBloodPressureCheck(160.0f));
-  EXPECT_TRUE(GetCapturedOutput().find(BLOODPRESSURE_ALERT) !=
-              std::string::npos);
-  ResetOutput();
-  EXPECT_FALSE(vitalBloodPressureCheck(200.0f));
-  EXPECT_TRUE(GetCapturedOutput().find(BLOODPRESSURE_ALERT) !=
-              std::string::npos);
-  ResetOutput();
-  EXPECT_FALSE(vitalBloodPressureCheck(300.0f));
-  EXPECT_TRUE(GetCapturedOutput().find(BLOODPRESSURE_ALERT) !=
-              std::string::npos);
-}
-// New sweep tests for respiratory rate in vitalRespiratoryRateCheck
-// Assuming standard ranges: min 12.0f, max 20.0f (adjust if different)
-TEST_F(MonitorTest, RespiratoryRateRangeSweep) {
-  // Below min
-  ResetOutput();
-  EXPECT_FALSE(vitalRespiratoryRateCheck(0.0f));
-  EXPECT_TRUE(GetCapturedOutput().find(RESPIRATORYRATE_ALERT) !=
-              std::string::npos);
-  ResetOutput();
-  EXPECT_FALSE(vitalRespiratoryRateCheck(5.0f));
-  EXPECT_TRUE(GetCapturedOutput().find(RESPIRATORYRATE_ALERT) !=
-              std::string::npos);
-  ResetOutput();
-  EXPECT_FALSE(vitalRespiratoryRateCheck(10.0f));
-  EXPECT_TRUE(GetCapturedOutput().find(RESPIRATORYRATE_ALERT) !=
-              std::string::npos);
-  // At boundaries
-  EXPECT_TRUE(vitalRespiratoryRateCheck(VITALS_RESPIRATORYRATE_MIN));
-  EXPECT_TRUE(vitalRespiratoryRateCheck(VITALS_RESPIRATORYRATE_MAX));
-  // Above max
-  ResetOutput();
-  EXPECT_FALSE(vitalRespiratoryRateCheck(25.0f));
-  EXPECT_TRUE(GetCapturedOutput().find(RESPIRATORYRATE_ALERT) !=
-              std::string::npos);
-  ResetOutput();
-  EXPECT_FALSE(vitalRespiratoryRateCheck(30.0f));
-  EXPECT_TRUE(GetCapturedOutput().find(RESPIRATORYRATE_ALERT) !=
-              std::string::npos);
-  ResetOutput();
-  EXPECT_FALSE(vitalRespiratoryRateCheck(40.0f));
-  EXPECT_TRUE(GetCapturedOutput().find(RESPIRATORYRATE_ALERT) !=
-              std::string::npos);
-}
-// Direct tests for individual new check functions
+
+/* Vitals 2.0 */
 TEST_F(MonitorTest, VitalBloodSugarCheck) {
-  ResetOutput();
-  EXPECT_EQ(vitalBloodSugarCheck(80.0f), 1);
-  EXPECT_EQ(GetCapturedOutput(), ""); // In range, no alert
-  ResetOutput();
-  EXPECT_EQ(vitalBloodSugarCheck(120.0f), 0); // Above max
-  EXPECT_TRUE(GetCapturedOutput().find(BLOODSUGAR_ALERT) != std::string::npos);
-  ResetOutput();
-  EXPECT_EQ(vitalBloodSugarCheck(60.0f), 0); // Below min
-  EXPECT_TRUE(GetCapturedOutput().find(BLOODSUGAR_ALERT) != std::string::npos);
+  CHECK_VITAL(vitalBloodSugarCheck, (80.0f), 1);
+  CHECK_VITAL(vitalBloodSugarCheck, (120.0f), 0, {BLOODSUGAR_ALERT});
+  CHECK_VITAL(vitalBloodSugarCheck, (60.0f), 0, {BLOODSUGAR_ALERT});
 }
+
 TEST_F(MonitorTest, VitalBloodPressureCheck) {
-  ResetOutput();
-  EXPECT_EQ(vitalBloodPressureCheck(120.0f), 1);
-  EXPECT_EQ(GetCapturedOutput(), ""); // In range
-  ResetOutput();
-  EXPECT_EQ(vitalBloodPressureCheck(160.0f), 0); // Above max
-  EXPECT_TRUE(GetCapturedOutput().find(BLOODPRESSURE_ALERT) !=
-              std::string::npos);
-  ResetOutput();
-  EXPECT_EQ(vitalBloodPressureCheck(80.0f), 0); // Below min
-  EXPECT_TRUE(GetCapturedOutput().find(BLOODPRESSURE_ALERT) !=
-              std::string::npos);
+  CHECK_VITAL(vitalBloodPressureCheck, (120.0f), 1);
+  CHECK_VITAL(vitalBloodPressureCheck, (160.0f), 0, {BLOODPRESSURE_ALERT});
+  CHECK_VITAL(vitalBloodPressureCheck, (80.0f), 0, {BLOODPRESSURE_ALERT});
 }
+
 TEST_F(MonitorTest, VitalRespiratoryRateCheck) {
-  ResetOutput();
-  EXPECT_EQ(vitalRespiratoryRateCheck(16.0f), 1);
-  EXPECT_EQ(GetCapturedOutput(), ""); // In range
-  ResetOutput();
-  EXPECT_EQ(vitalRespiratoryRateCheck(25.0f), 0); // Above max
-  EXPECT_TRUE(GetCapturedOutput().find(RESPIRATORYRATE_ALERT) !=
-              std::string::npos);
-  ResetOutput();
-  EXPECT_EQ(vitalRespiratoryRateCheck(10.0f), 0); // Below min
-  EXPECT_TRUE(GetCapturedOutput().find(RESPIRATORYRATE_ALERT) !=
-              std::string::npos);
+  CHECK_VITAL(vitalRespiratoryRateCheck, (16.0f), 1);
+  CHECK_VITAL(vitalRespiratoryRateCheck, (25.0f), 0, {RESPIRATORYRATE_ALERT});
+  CHECK_VITAL(vitalRespiratoryRateCheck, (10.0f), 0, {RESPIRATORYRATE_ALERT});
 }
-// Tests for monitorVitalsReportStatus
+
 TEST_F(MonitorTest, VitalsReportNormalWhenAllInRange) {
-  Report_t report = {98.4f, 73.0f, 97.0f, 80.0f, 120.0f, 16.0f}; // All in range
-  EXPECT_TRUE(monitorVitalsReportStatus(&report));
-  EXPECT_EQ(GetCapturedOutput(), ""); // No alerts
+  Report_t report = {98.4f, 73.0f, 97.0f, 80.0f, 120.0f, 16.0f};
+  CHECK_VITAL(monitorVitalsReportStatus, (&report), 1);
 }
+
 TEST_F(MonitorTest, VitalsReportNormalFalseWhenAnyOutOfRange) {
   Report_t report_temp_high = {104.0f, 73.0f, 97.0f, 80.0f, 120.0f, 16.0f};
-  ResetOutput();
-  EXPECT_FALSE(monitorVitalsReportStatus(&report_temp_high));
-  EXPECT_TRUE(GetCapturedOutput().find(TEMPERATURE_ALERT) != std::string::npos);
+  CHECK_VITAL(monitorVitalsReportStatus, (&report_temp_high), 0,
+              {TEMPERATURE_ALERT});
+
   Report_t report_blood_sugar_low = {98.4f, 73.0f, 97.0f, 60.0f, 120.0f, 16.0f};
-  ResetOutput();
-  EXPECT_FALSE(monitorVitalsReportStatus(&report_blood_sugar_low));
-  EXPECT_TRUE(GetCapturedOutput().find(BLOODSUGAR_ALERT) != std::string::npos);
+  CHECK_VITAL(monitorVitalsReportStatus, (&report_blood_sugar_low), 0,
+              {BLOODSUGAR_ALERT});
+
   Report_t report_blood_pressure_high = {98.4f, 73.0f,  97.0f,
                                          80.0f, 160.0f, 16.0f};
-  ResetOutput();
-  EXPECT_FALSE(monitorVitalsReportStatus(&report_blood_pressure_high));
-  EXPECT_TRUE(GetCapturedOutput().find(BLOODPRESSURE_ALERT) !=
-              std::string::npos);
+  CHECK_VITAL(monitorVitalsReportStatus, (&report_blood_pressure_high), 0,
+              {BLOODPRESSURE_ALERT});
+
   Report_t report_respiratory_low = {98.4f, 73.0f, 97.0f, 80.0f, 120.0f, 10.0f};
-  ResetOutput();
-  EXPECT_FALSE(monitorVitalsReportStatus(&report_respiratory_low));
-  EXPECT_TRUE(GetCapturedOutput().find(RESPIRATORYRATE_ALERT) !=
-              std::string::npos);
+  CHECK_VITAL(monitorVitalsReportStatus, (&report_respiratory_low), 0,
+              {RESPIRATORYRATE_ALERT});
 }
+
 TEST_F(MonitorTest, VitalsReportNormalMultipleAlerts) {
-  Report_t report_multiple_out = {104.0f, 110.0f, 80.0f, 120.0f, 160.0f, 25.0f};
+  Report_t report_multi = {104.0f, 110.0f, 80.0f, 120.0f, 160.0f, 25.0f};
+
   ResetOutput();
-  EXPECT_FALSE(monitorVitalsReportStatus(&report_multiple_out));
-  std::string output;
-  EXPECT_POSITION_ALERT(output, TEMPERATURE_ALERT, PULSE_ALERT, SPO2_ALERT);
-  EXPECT_POSITION_ALERT(output, BLOODSUGAR_ALERT, BLOODPRESSURE_ALERT,
-                        RESPIRATORYRATE_ALERT);
+  EXPECT_FALSE(monitorVitalsReportStatus(&report_multi));
+  ExpectMultipleAlerts(GetCapturedOutput(),
+                       {TEMPERATURE_ALERT, PULSE_ALERT, SPO2_ALERT,
+                        BLOODSUGAR_ALERT, BLOODPRESSURE_ALERT,
+                        RESPIRATORYRATE_ALERT});
+
+  CHECK_VITAL(monitorVitalsReportStatus, (&report_multi), 0,
+              {TEMPERATURE_ALERT, PULSE_ALERT, SPO2_ALERT, BLOODSUGAR_ALERT,
+               BLOODPRESSURE_ALERT, RESPIRATORYRATE_ALERT});
 }
-// Edge cases for new vitals in individual checks
+
 TEST_F(MonitorTest, NewVitalsEdgeCasesWithInvalidValues) {
   float nan = std::numeric_limits<float>::quiet_NaN();
   float inf = std::numeric_limits<float>::infinity();
-  // NaN in blood sugar
-  ResetOutput();
-  EXPECT_FALSE(vitalBloodSugarCheck(nan));
-  EXPECT_TRUE(GetCapturedOutput().find(BLOODSUGAR_ALERT) != std::string::npos);
-  // Inf in blood pressure
-  ResetOutput();
-  EXPECT_FALSE(vitalBloodPressureCheck(inf));
-  EXPECT_TRUE(GetCapturedOutput().find(BLOODPRESSURE_ALERT) !=
-              std::string::npos);
-  // Negative Inf in respiratory rate
-  ResetOutput();
-  EXPECT_FALSE(vitalRespiratoryRateCheck(-inf));
-  EXPECT_TRUE(GetCapturedOutput().find(RESPIRATORYRATE_ALERT) !=
-              std::string::npos);
+
+  auto expectOut = [this](auto func, float val, const char *alert) {
+    ResetOutput();
+    EXPECT_FALSE(func(val));
+    EXPECT_TRUE(GetCapturedOutput().find(alert) != std::string::npos);
+  };
+
+  expectOut(vitalBloodSugarCheck, nan, BLOODSUGAR_ALERT);
+  expectOut(vitalBloodPressureCheck, inf, BLOODPRESSURE_ALERT);
+  expectOut(vitalRespiratoryRateCheck, -inf, RESPIRATORYRATE_ALERT);
 }
-// Edge cases for monitorVitalsReportStatus with invalid values
+
 TEST_F(MonitorTest, VitalsReportNormalWithInvalidValues) {
   float nan = std::numeric_limits<float>::quiet_NaN();
   float inf = std::numeric_limits<float>::infinity();
-  Report_t report_nan_blood_sugar = {98.4f, 73.0f, 97.0f, nan, 120.0f, 16.0f};
-  ResetOutput();
-  EXPECT_FALSE(monitorVitalsReportStatus(&report_nan_blood_sugar));
-  EXPECT_TRUE(GetCapturedOutput().find(BLOODSUGAR_ALERT) != std::string::npos);
-  Report_t report_inf_blood_pressure = {98.4f, 73.0f, 97.0f, 80.0f, inf, 16.0f};
-  ResetOutput();
-  EXPECT_FALSE(monitorVitalsReportStatus(&report_inf_blood_pressure));
-  EXPECT_TRUE(GetCapturedOutput().find(BLOODPRESSURE_ALERT) !=
-              std::string::npos);
-  Report_t report_nan_respiratory = {98.4f, 73.0f, 97.0f, 80.0f, 120.0f, nan};
-  ResetOutput();
-  EXPECT_FALSE(monitorVitalsReportStatus(&report_nan_respiratory));
-  EXPECT_TRUE(GetCapturedOutput().find(RESPIRATORYRATE_ALERT) !=
-              std::string::npos);
+
+  Report_t report_nan_bs = {98.4f, 73.0f, 97.0f, nan, 120.0f, 16.0f};
+  CHECK_VITAL_FALSE(monitorVitalsReportStatus, (&report_nan_bs), 0,
+                    {BLOODSUGAR_ALERT});
+
+  Report_t report_inf_bp = {98.4f, 73.0f, 97.0f, 80.0f, inf, 16.0f};
+  CHECK_VITAL_FALSE(monitorVitalsReportStatus, (&report_inf_bp), 0,
+                    {BLOODPRESSURE_ALERT});
+
+  Report_t report_nan_rr = {98.4f, 73.0f, 97.0f, 80.0f, 120.0f, nan};
+  CHECK_VITAL_FALSE(monitorVitalsReportStatus, (&report_nan_rr), 0,
+                    {RESPIRATORYRATE_ALERT});
 }
