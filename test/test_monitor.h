@@ -9,14 +9,14 @@
 // Fixture class to set up common test environment
 class MonitorTest : public ::testing::Test {
 protected:
-  // cppcheck-suppress unusedFunction  // Suppress false positive; called by
+  // cppcheck-suppress unusedFunction
   void SetUp() override {
     // Set no-op delay for all tests to avoid real sleeps and make tests fast
     vitalUpdateAlertDelay([](long long /*seconds*/) {});
     // Redirect cout to a stringstream for output capture
     original_cout_buffer = std::cout.rdbuf(output_stream.rdbuf());
   }
-  // cppcheck-suppress unusedFunction  // Suppress false positive; called by
+  // cppcheck-suppress unusedFunction
   void TearDown() override {
     // Restore original cout buffer
     std::cout.rdbuf(original_cout_buffer);
