@@ -1,10 +1,7 @@
----
 name: No Duplications
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+
+on: [push, pull_request]
+
 jobs:
   nodups:
     runs-on: ubuntu-latest
@@ -12,17 +9,18 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install PMD
         run: |
-          wget https://github.com/pmd/pmd/releases/download/pmd_releases%2F7.6.0/pmd-dist-7.6.0-bin.zip
-          unzip pmd-dist-7.6.0-bin.zip
-          mv pmd-bin-7.6.0 pmd
-          chmod +x pmd/bin/pmd  # Ensure executable permissions
+          cd $HOME
+          wget https://github.com/pmd/pmd/releases/download/pmd_releases%2F7.16.0/pmd-dist-7.16.0-bin.zip
+          unzip pmd-dist-7.16.0-bin.zip
+          alias pmd="$HOME/pmd-bin-7.16.0/bin/pmd"
+          pmd check -d /usr/src -R rulesets/java/quickstart.xml -f text
       - name: Verify directories
         run: |
           ls -l src test || echo "Directories src/ or test/ not found"
           find src test -name "*.cpp" -o -name "*.h" || echo "No .cpp or .h files found"
       - name: Run PMD CPD
         run: |
-          ./pmd/bin/pmd cpd --minimum-tokens 25 --minimum-lines 3 --language cpp --dir src test --format xml > cpd-report.xml || {
+          ./pmd/bin/pmd cpd --minimum-tokens 25 --language cpp --dir src test --format xml > cpd-report.xml || {
             echo "PMD CPD failed"
             exit 1
           }
