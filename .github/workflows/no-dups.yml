@@ -1,39 +1,53 @@
-name: No Duplications
+name: No Duplicates (CPD)
 
-on: [push, pull_request]
+on:
+  push:
+    paths:
+      - "src/**"
+      - "test/**"
+  pull_request:
+    paths:
+      - "src/**"
+      - "test/**"
 
 jobs:
-  nodups:
+  cpd:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Set up Java (required for PMD)
+        uses: actions/setup-java@v3
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
       - name: Download PMD
         run: |
-          wget https://github.com/pmd/pmd/releases/download/pmd_releases/7.15.0/pmd-bin-7.15.0.zip
-          unzip pmd-bin-7.16.0.zip
-          echo "${GITHUB_WORKSPACE}/pmd-bin-7.16.0/bin" >> $GITHUB_PATH
-      - name: Verify directories
+          wget https://github.com/pmd/pmd/releases/download/pmd_releases%2F7.14.0/pmd-bin-7.14.0.zip
+          unzip pmd-bin-7.14.0.zip
+
+      - name: Run CPD for duplicates
         run: |
-          ls -l src test || echo "Directories src/ or test/ not found"
-          find src test -name "*.cpp" -o -name "*.h" || echo "No .cpp or .h files found"
-      - name: Run PMD CPD
-        run: |
-          ./pmd/bin/pmd cpd --minimum-tokens 25 --language cpp --dir src test --format xml > cpd-report.xml || {
-            echo "PMD CPD failed"
-            exit 1
-          }
-      - name: Check for duplicates
-        run: |
-          if grep -q "<duplication" cpd-report.xml; then
-            echo "Duplicates found!"
-            cat cpd-report.xml
-            exit 1
-          else
-            echo "No duplicates found"
-          fi
+          ./pmd-bin-7.14.0/bin/run.sh cpd \
+            --minimum-tokens 25 \
+            --language cpp \
+            --dir src \
+            --dir test \
+            --format xml \
+            --fail-on-violation \
+            --skip-duplicate-files
+
       - name: Upload CPD report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: cpd-report
-          path: cpd-report.xml
+          path: pmd-bin-7.14.0/bin/report.xml
+
+      - name: Display CPD report (on failure)
+        if: failure()
+        run: |
+          echo "CPD found duplicates:"
+          cat pmd-bin-7.14.0/bin/report.xml
