@@ -41,7 +41,7 @@ jobs:
 
       - name: Upload CPD report
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: cpd-report
           path: pmd-bin-7.14.0/bin/report.xml
