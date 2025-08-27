@@ -1,16 +1,26 @@
 name: No Duplications
-
-on: [push, pull_request]
-
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
 jobs:
   nodups:
-
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v4
-    - name: Install jscpd
-      run: sudo npm install -g jscpd
-
-    - name: No Duplication beyond 3 lines
-      run:  jscpd . --gitignore --min-lines 3 --min-tokens 25 --threshold 0
+      - uses: actions/checkout@v4
+      - name: Install PMD
+        run: |
+          wget https://github.com/pmd/pmd/releases/download/pmd_releases%2F7.6.0/pmd-dist-7.6.0-bin.zip
+          unzip pmd-dist-7.6.0-bin.zip
+          mv pmd-bin-7.6.0 pmd
+      - name: Run PMD CPD
+        run: |
+          ./pmd/bin/pmd cpd --minimum-tokens 25 --language cpp --d src test --format xml > cpd-report.xml
+      - name: Check for duplicates
+        run: |
+          if grep -q "<duplication" cpd-report.xml; then
+            echo "Duplicates found!"
+            cat cpd-report.xml
+            exit 1
+          fi
