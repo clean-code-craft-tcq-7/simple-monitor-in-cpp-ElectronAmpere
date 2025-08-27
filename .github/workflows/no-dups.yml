@@ -23,21 +23,20 @@ jobs:
           distribution: "temurin"
           java-version: "17"
 
-      - name: Download PMD
+      - name: Download PMD 7.14.0
         run: |
-          wget https://github.com/pmd/pmd/releases/download/pmd_releases%2F7.14.0/pmd-bin-7.14.0.zip
-          unzip pmd-bin-7.14.0.zip
+          wget https://github.com/pmd/pmd/releases/download/pmd_releases%2F7.14.0/pmd-dist-7.14.0-bin.zip
+          unzip pmd-dist-7.14.0-bin.zip
 
       - name: Run CPD for duplicates
         run: |
-          ./pmd-bin-7.14.0/bin/run.sh cpd \
+          ./pmd-bin-7.14.0/bin/pmd cpd \
             --minimum-tokens 25 \
             --language cpp \
             --dir src \
             --dir test \
             --format xml \
-            --fail-on-violation \
-            --skip-duplicate-files
+            --fail-on-violation
 
       - name: Upload CPD report
         if: always()
