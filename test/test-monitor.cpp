@@ -7,14 +7,6 @@
 #include <string>
 #include <vector>
 
-// Helper to verify multiple alerts in captured output
-void ExpectMultipleAlerts(const std::string &output,
-                          const std::vector<const char *> &alerts) {
-  for (const char *alert : alerts) {
-    EXPECT_TRUE(output.find(alert) != std::string::npos);
-  }
-}
-
 // Sweep Tests for all vitals
 struct SweepParam {
   std::function<bool(float)> checkFunc;
@@ -23,64 +15,15 @@ struct SweepParam {
   std::vector<float> belowValues, aboveValues;
 };
 
+namespace EdgeCaseFloats {
+inline float NaN() { return std::numeric_limits<float>::quiet_NaN(); }
+inline float Inf() { return std::numeric_limits<float>::infinity(); }
+inline float NegInf() { return -std::numeric_limits<float>::infinity(); }
+} // namespace EdgeCaseFloats
+
 // For parameterized sweeps
 class VitalSweepTest : public MonitorTest,
                        public ::testing::WithParamInterface<SweepParam> {};
-
-TEST_P(VitalSweepTest, RangeSweep) {
-  auto param = GetParam();
-
-  auto expectOut = [this](auto func, float value, const char *alert) {
-    ResetOutput();
-    EXPECT_FALSE(func(value));
-    EXPECT_TRUE(GetCapturedOutput().find(alert) != std::string::npos);
-  };
-
-  for (float value : param.belowValues) {
-    expectOut(param.checkFunc, value, param.alert);
-  }
-
-  EXPECT_TRUE(param.checkFunc(param.min));
-  EXPECT_TRUE(param.checkFunc(param.max));
-
-  for (float value : param.aboveValues) {
-    expectOut(param.checkFunc, value, param.alert);
-  }
-}
-
-INSTANTIATE_TEST_SUITE_P(BloodSugar, VitalSweepTest,
-                         ::testing::Values(SweepParam{
-                             vitalBloodSugarCheck,
-                             VITALS_BLOODSUGAR_MIN,
-                             VITALS_BLOODSUGAR_MAX,
-                             BLOODSUGAR_ALERT,
-                             {10.0f, 20.0f, 30.0f, 60.0f},
-                             {120.0f, 200.0f, 300.0f}}));
-
-INSTANTIATE_TEST_SUITE_P(BloodPressure, VitalSweepTest,
-                         ::testing::Values(SweepParam{
-                             vitalBloodPressureCheck,
-                             VITALS_BLOODPRESSURE_MIN,
-                             VITALS_BLOODPRESSURE_MAX,
-                             BLOODPRESSURE_ALERT,
-                             {10.0f, 20.0f, 30.0f, 80.0f},
-                             {160.0f, 200.0f, 300.0f}}));
-
-INSTANTIATE_TEST_SUITE_P(RespiratoryRate, VitalSweepTest,
-                         ::testing::Values(SweepParam{
-                             vitalRespiratoryRateCheck,
-                             VITALS_RESPIRATORYRATE_MIN,
-                             VITALS_RESPIRATORYRATE_MAX,
-                             RESPIRATORYRATE_ALERT,
-                             {0.0f, 5.0f, 10.0f},
-                             {25.0f, 30.0f, 40.0f}}));
-
-TEST_F(MonitorTest, OkWhenAllVitalsInRange) {
-  EXPECT_TRUE(monitorVitalsStatus(98.4f, 73.0f, 97.0f));
-  EXPECT_TRUE(monitorVitalsStatus(98.1f, 70.0f, 98.0f));
-  EXPECT_TRUE(monitorVitalsStatus(98.4f, 73.0f, 97.0f));
-  EXPECT_EQ(GetCapturedOutput(), "");
-}
 
 // Macros for generalized vital checks without ambiguity
 // Utility to call a function with a tuple of arguments
@@ -113,6 +56,69 @@ TEST_F(MonitorTest, OkWhenAllVitalsInRange) {
     ++counter;                                                                 \
     position += strlen(pattern);                                               \
   }
+
+INSTANTIATE_TEST_SUITE_P(BloodSugar, VitalSweepTest,
+                         ::testing::Values(SweepParam{
+                             vitalBloodSugarCheck,
+                             VITALS_BLOODSUGAR_MIN,
+                             VITALS_BLOODSUGAR_MAX,
+                             BLOODSUGAR_ALERT,
+                             {10.0f, 20.0f, 30.0f, 60.0f},
+                             {120.0f, 200.0f, 300.0f}}));
+
+INSTANTIATE_TEST_SUITE_P(BloodPressure, VitalSweepTest,
+                         ::testing::Values(SweepParam{
+                             vitalBloodPressureCheck,
+                             VITALS_BLOODPRESSURE_MIN,
+                             VITALS_BLOODPRESSURE_MAX,
+                             BLOODPRESSURE_ALERT,
+                             {10.0f, 20.0f, 30.0f, 80.0f},
+                             {160.0f, 200.0f, 300.0f}}));
+
+INSTANTIATE_TEST_SUITE_P(RespiratoryRate, VitalSweepTest,
+                         ::testing::Values(SweepParam{
+                             vitalRespiratoryRateCheck,
+                             VITALS_RESPIRATORYRATE_MIN,
+                             VITALS_RESPIRATORYRATE_MAX,
+                             RESPIRATORYRATE_ALERT,
+                             {0.0f, 5.0f, 10.0f},
+                             {25.0f, 30.0f, 40.0f}}));
+
+// Helper to verify multiple alerts in captured output
+void ExpectMultipleAlerts(const std::string &output,
+                          const std::vector<const char *> &alerts) {
+  for (const char *alert : alerts) {
+    EXPECT_TRUE(output.find(alert) != std::string::npos);
+  }
+}
+
+TEST_P(VitalSweepTest, RangeSweep) {
+  auto param = GetParam();
+
+  auto expectOut = [this](auto func, float value, const char *alert) {
+    ResetOutput();
+    EXPECT_FALSE(func(value));
+    EXPECT_TRUE(GetCapturedOutput().find(alert) != std::string::npos);
+  };
+
+  for (float value : param.belowValues) {
+    expectOut(param.checkFunc, value, param.alert);
+  }
+
+  EXPECT_TRUE(param.checkFunc(param.min));
+  EXPECT_TRUE(param.checkFunc(param.max));
+
+  for (float value : param.aboveValues) {
+    expectOut(param.checkFunc, value, param.alert);
+  }
+}
+
+TEST_F(MonitorTest, OkWhenAllVitalsInRange) {
+  EXPECT_TRUE(monitorVitalsStatus(98.4f, 73.0f, 97.0f));
+  EXPECT_TRUE(monitorVitalsStatus(98.1f, 70.0f, 98.0f));
+  EXPECT_TRUE(monitorVitalsStatus(98.4f, 73.0f, 97.0f));
+  EXPECT_EQ(GetCapturedOutput(), "");
+}
 
 // Tests for individual vitals
 TEST_F(MonitorTest, FalseWhenAnyVitalOutOfRange) {
@@ -264,33 +270,28 @@ TEST_F(MonitorTest, VitalsReportNormalMultipleAlerts) {
 }
 
 TEST_F(MonitorTest, NewVitalsEdgeCasesWithInvalidValues) {
-  float nan = std::numeric_limits<float>::quiet_NaN();
-  float inf = std::numeric_limits<float>::infinity();
 
-  auto expectOut = [this](auto func, float val, const char *alert) {
-    ResetOutput();
-    EXPECT_FALSE(func(val));
-    EXPECT_TRUE(GetCapturedOutput().find(alert) != std::string::npos);
-  };
-
-  expectOut(vitalBloodSugarCheck, nan, BLOODSUGAR_ALERT);
-  expectOut(vitalBloodPressureCheck, inf, BLOODPRESSURE_ALERT);
-  expectOut(vitalRespiratoryRateCheck, -inf, RESPIRATORYRATE_ALERT);
+  ExpectInvalidValueAlert(vitalBloodSugarCheck, EdgeCaseFloats::NaN(),
+                          BLOODSUGAR_ALERT);
+  ExpectInvalidValueAlert(vitalBloodPressureCheck, EdgeCaseFloats::Inf(),
+                          BLOODPRESSURE_ALERT);
+  ExpectInvalidValueAlert(vitalRespiratoryRateCheck, EdgeCaseFloats::NegInf(),
+                          RESPIRATORYRATE_ALERT);
 }
 
 TEST_F(MonitorTest, VitalsReportNormalWithInvalidValues) {
-  float nan = std::numeric_limits<float>::quiet_NaN();
-  float inf = std::numeric_limits<float>::infinity();
-
-  Report_t report_nan_bs = {98.4f, 73.0f, 97.0f, nan, 120.0f, 16.0f};
+  Report_t report_nan_bs = {98.4f,  73.0f, 97.0f, EdgeCaseFloats::NaN(),
+                            120.0f, 16.0f};
   CHECK_VITAL_FALSE(monitorVitalsReportStatus, (&report_nan_bs), 0,
                     {BLOODSUGAR_ALERT});
 
-  Report_t report_inf_bp = {98.4f, 73.0f, 97.0f, 80.0f, inf, 16.0f};
+  Report_t report_inf_bp = {98.4f, 73.0f, 97.0f, 80.0f, EdgeCaseFloats::Inf(),
+                            16.0f};
   CHECK_VITAL_FALSE(monitorVitalsReportStatus, (&report_inf_bp), 0,
                     {BLOODPRESSURE_ALERT});
 
-  Report_t report_nan_rr = {98.4f, 73.0f, 97.0f, 80.0f, 120.0f, nan};
+  Report_t report_nan_rr = {98.4f, 73.0f,  97.0f,
+                            80.0f, 120.0f, EdgeCaseFloats::NaN()};
   CHECK_VITAL_FALSE(monitorVitalsReportStatus, (&report_nan_rr), 0,
                     {RESPIRATORYRATE_ALERT});
 }

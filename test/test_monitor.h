@@ -2,9 +2,12 @@
 #include "../src/alerts.h"
 #include "../src/monitor.h" // Assuming this is the include path for the header
 #include "../src/vitals.h"
+#include <functional>
 #include <gtest/gtest.h>
 #include <iostream>
+#include <limits>
 #include <sstream> // For capturing stdout in tests
+#include <string>
 
 // Fixture class to set up common test environment
 class MonitorTest : public ::testing::Test {
@@ -35,4 +38,13 @@ protected:
 private:
   std::stringstream output_stream;
   std::streambuf *original_cout_buffer = nullptr;
+
+protected:
+  // Helper to check alert for invalid float value
+  void ExpectInvalidValueAlert(const std::function<bool(float)> &checkFunc,
+                               float value, const char *alert) {
+    ResetOutput();
+    EXPECT_FALSE(checkFunc(value));
+    EXPECT_TRUE(GetCapturedOutput().find(alert) != std::string::npos);
+  }
 };
