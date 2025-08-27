@@ -1,12 +1,11 @@
 name: No Duplications
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+
+on: [push, pull_request]
+
 jobs:
   nodups:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
       - name: Install PMD
@@ -16,7 +15,7 @@ jobs:
           mv pmd-bin-7.6.0 pmd
       - name: Run PMD CPD
         run: |
-          ./pmd/bin/pmd cpd --minimum-tokens 25 --language cpp --d src test --format xml > cpd-report.xml
+          ./pmd/bin/pmd cpd --minimum-tokens 25 --language cpp -d src test --format xml > cpd-report.xml
       - name: Check for duplicates
         run: |
           if grep -q "<duplication" cpd-report.xml; then
@@ -24,3 +23,9 @@ jobs:
             cat cpd-report.xml
             exit 1
           fi
+      - name: Upload CPD report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpd-report
+          path: cpd-report.xml
