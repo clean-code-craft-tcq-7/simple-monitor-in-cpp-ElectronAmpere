@@ -95,21 +95,15 @@ void ExpectMultipleAlerts(const std::string &output,
 TEST_P(VitalSweepTest, RangeSweep) {
   auto param = GetParam();
 
-  auto expectOut = [this](auto func, float value, const char *alert) {
-    ResetOutput();
-    EXPECT_FALSE(func(value));
-    EXPECT_TRUE(GetCapturedOutput().find(alert) != std::string::npos);
-  };
-
   for (float value : param.belowValues) {
-    expectOut(param.checkFunc, value, param.alert);
+    ExpectInvalidValueAlert(param.checkFunc, value, param.alert);
   }
 
   EXPECT_TRUE(param.checkFunc(param.min));
   EXPECT_TRUE(param.checkFunc(param.max));
 
   for (float value : param.aboveValues) {
-    expectOut(param.checkFunc, value, param.alert);
+    ExpectInvalidValueAlert(param.checkFunc, value, param.alert);
   }
 }
 
@@ -201,16 +195,18 @@ TEST_F(MonitorTest, VitalUpdateAlertDelay) {
 }
 
 TEST_F(MonitorTest, EdgeCasesWithInvalidValues) {
-  float nan = std::numeric_limits<float>::quiet_NaN();
-  float inf = std::numeric_limits<float>::infinity();
-  float neg_inf = -inf;
-
-  CHECK_VITAL(monitorVitalsStatus, (nan, 72.0f, 97.0f), 0, {TEMPERATURE_ALERT});
-  CHECK_VITAL(monitorVitalsStatus, (98.4f, inf, 97.0f), 0, {PULSE_ALERT});
-  CHECK_VITAL(monitorVitalsStatus, (98.4f, 72.0f, neg_inf), 0, {SPO2_ALERT});
-  CHECK_VITAL(monitorVitalsStatus, (98.4f, nan, 97.0f), 0, {PULSE_ALERT});
-  CHECK_VITAL(monitorVitalsStatus, (inf, inf, inf), 0,
-              {TEMPERATURE_ALERT, PULSE_ALERT, SPO2_ALERT});
+  CHECK_VITAL(monitorVitalsStatus, (EdgeCaseFloats::NaN(), 72.0f, 97.0f), 0,
+              {TEMPERATURE_ALERT});
+  CHECK_VITAL(monitorVitalsStatus, (98.4f, EdgeCaseFloats::Inf(), 97.0f), 0,
+              {PULSE_ALERT});
+  CHECK_VITAL(monitorVitalsStatus, (98.4f, 72.0f, EdgeCaseFloats::NegInf()), 0,
+              {SPO2_ALERT});
+  CHECK_VITAL(monitorVitalsStatus, (98.4f, EdgeCaseFloats::NaN(), 97.0f), 0,
+              {PULSE_ALERT});
+  CHECK_VITAL(
+      monitorVitalsStatus,
+      (EdgeCaseFloats::Inf(), EdgeCaseFloats::Inf(), EdgeCaseFloats::Inf()), 0,
+      {TEMPERATURE_ALERT, PULSE_ALERT, SPO2_ALERT});
 }
 
 TEST_F(MonitorTest, MultipleAlertsInOneCheck) {
