@@ -1,10 +1,8 @@
 #include "./test_monitor.h"
+#include <chrono>
 #include <cmath>
 #include <cstddef>
-#include <functional>
-#include <limits>
 #include <regex>
-#include <string>
 #include <vector>
 
 // Sweep Tests for all vitals
@@ -290,4 +288,17 @@ TEST_F(MonitorTest, VitalsReportNormalWithInvalidValues) {
                             80.0f, 120.0f, EdgeCaseFloats::NaN()};
   CHECK_VITAL_FALSE(monitorVitalsReportStatus, (&report_nan_rr), 0,
                     {RESPIRATORYRATE_ALERT});
+}
+
+TEST(VitalAlertDelayDisplayTest, SleepsForApproximateDuration) {
+  using namespace std::chrono;
+  auto start = steady_clock::now();
+
+  vitalAlertDelayDisplay(2); // 2 seconds
+
+  auto end = steady_clock::now();
+  auto elapsed = duration_cast<seconds>(end - start).count();
+
+  EXPECT_GE(elapsed, 2);
+  EXPECT_LE(elapsed, 3); // Allow some wiggle room
 }
