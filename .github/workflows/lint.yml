@@ -28,8 +28,8 @@ jobs:
 
     - name: cppcheck
       run: |
-        cppcheck --enable=all --error-exitcode=1 --suppress=missingIncludeSystem --std=c++17 *.cpp *.h
+        cppcheck --enable=all --error-exitcode=1 --suppress=missingIncludeSystem --std=c++17 --inline-suppr src test
 
     - name: clang-format
       run: |
-        clang-tidy -p=. *.cpp *.h
+        clang-tidy -p=. src/*.cpp src/*.h

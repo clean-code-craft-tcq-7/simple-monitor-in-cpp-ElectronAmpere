@@ -25,7 +25,7 @@ jobs:
       run: build/test-monitor
 
     - name: collect coverage
-      run: gcovr --gcov-exclude=".*test.*" -r . --html --html-details -o coverage.html --print-summary
+      run: gcovr --gcov-exclude=".*test.*" --gcov-exclude=".*gmock.*" -r . --html --html-details -o coverage.html --print-summary
 
     - name: create coverage artifact
       uses: actions/upload-artifact@v4
