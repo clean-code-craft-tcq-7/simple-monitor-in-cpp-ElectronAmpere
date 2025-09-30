@@ -1,16 +1,52 @@
-name: No Duplications
+name: No Duplicates (CPD)
 
-on: [push, pull_request]
+on:
+  push:
+    paths:
+      - "src/**"
+      - "test/**"
+  pull_request:
+    paths:
+      - "src/**"
+      - "test/**"
 
 jobs:
-  nodups:
-
+  cpd:
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v4
-    - name: Install jscpd
-      run: sudo npm install -g jscpd
+      - name: Check out code
+        uses: actions/checkout@v3
 
-    - name: No Duplication beyond 3 lines
-      run:  jscpd *.cpp --gitignore --min-lines 3 --min-tokens 25 --threshold 0
+      - name: Set up Java (required for PMD)
+        uses: actions/setup-java@v3
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Download PMD 7.14.0
+        run: |
+          wget https://github.com/pmd/pmd/releases/download/pmd_releases%2F7.14.0/pmd-dist-7.14.0-bin.zip
+          unzip pmd-dist-7.14.0-bin.zip
+
+      - name: Run CPD for duplicates
+        run: |
+          ./pmd-bin-7.14.0/bin/pmd cpd \
+            --minimum-tokens 25 \
+            --language cpp \
+            --dir src \
+            --dir test \
+            --format xml \
+            --fail-on-violation
+
+      - name: Upload CPD report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpd-report
+          path: pmd-bin-7.14.0/bin/report.xml
+
+      - name: Display CPD report (on failure)
+        if: failure()
+        run: |
+          echo "CPD found duplicates:"
+          cat pmd-bin-7.14.0/bin/report.xml
