@@ -336,15 +336,16 @@ TEST_F(VitalsMonitorTest, GetVitalsHandlerInfo_NullInput) {
 TEST_F(VitalsMonitorTest, ProcessVital_TemperatureLowWarning) {
   vitalsHandler_t handle = {
     .name = "temperature",
-    .report_value = 35.0,
+    .report_value = 35.3,  // Changed from 35.0
     .report_unit = "C",
   };
   char *info = processVital(&temperatureConfig, &handle);
   ASSERT_NE(info, nullptr);
-  std::string expected = "Vital: temperature\nReported: 35.00 C\nBase Value: 95.00 F\nStatus: WARNING: Approaching hypothermia";
+  std::string expected = "Vital: temperature\nReported: 35.30 C\nBase Value: 95.54 F\nStatus: WARNING: Approaching hypothermia";
   EXPECT_STREQ(info, expected.c_str());
   free(info);
 }
+
 
 TEST_F(VitalsMonitorTest, ProcessVital_PulseHighWarning) {
   vitalsHandler_t handle = {
